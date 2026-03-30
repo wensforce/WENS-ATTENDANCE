@@ -16,7 +16,7 @@ import { usereportApi } from "../api/reportApi.js";
 import DataTable from "../components/DataTable.jsx";
 import { toast } from "react-toastify";
 import exportToExcel from "../components/report/ExportToExcel.jsx";
-import exportToPDF from "../components/report/ExportToPdf.jsx";
+import exportToPDF from "../components/report/ExportToPDF.jsx";
 import useDebounce from "../../../shared/hooks/useDebounce.js";
 
 // ─── Stat Card ────────────────────────────────────────────────────────────
