@@ -1,0 +1,138 @@
+@import "tailwindcss";
+
+body {
+  font-family: "Inter", sans-serif;
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
+}
+
+@theme inline {
+  /* Base Theme */
+  --color-background: #f9fafb;
+  --color-surface: #ffffff;
+  --color-card: #ffffff;
+  --color-border: #e5e7eb;
+
+  /* Primary (Black Theme) */
+  --color-primary: #000000;
+  --color-primary-foreground: #ffffff;
+
+  /* Text */
+  --color-text-primary: #111827;
+  --color-text-secondary: #6b7280;
+  --color-text-muted: #9ca3af;
+
+  /* Status Colors (Attendance) */
+  --color-present-bg: #ecfdf5;
+--color-present-text: #065f46;
+--color-present-dot: #10b981;
+
+--color-absent-bg: #fff1f2;
+--color-absent-text: #9f1239;
+--color-absent-dot: #f43f5e;
+
+--color-halfday-bg: #fffbeb;
+--color-halfday-text: #92400e;
+--color-halfday-dot: #f59e0b;
+
+--color-overtime-bg: #dcfce7;
+--color-overtime-text: #14532d;
+--color-overtime-dot: #16a34a;
+
+--color-late-bg: #fefce8;
+--color-late-text: #854d0e;
+--color-late-dot: #facc15;
+
+--color-wfh-bg: #ecfeff;
+--color-wfh-text: #155e75;
+--color-wfh-dot: #06b6d4;
+
+--color-weekoff-bg: #f1f5f9;
+--color-weekoff-text: #334155;
+--color-weekoff-dot: #94a3b8;
+
+--color-holiday-bg: #eef2ff;
+--color-holiday-text: #3730a3;
+--color-holiday-dot: #6366f1;
+
+--color-special-bg: #f5f3ff;
+--color-special-text: #5b21b6;
+--color-special-dot: #8b5cf6;
+
+  /* Extra UI States */
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-info: #3b82f6;
+
+  /* Calendar */
+  --color-calendar-cell-bg: #ffffff;
+  --color-calendar-cell-hover: #f3f4f6;
+  --color-calendar-cell-selected: #111827;
+  --color-calendar-cell-selected-text: #ffffff;
+
+  /* Shadows */
+  --shadow-sm: 0px 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0px 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.calendar-container .react-calendar {
+  background: transparent;
+  border: none;
+  font-family: inherit;
+}
+
+.calendar-container .react-calendar__month-view__weekdays {
+  text-align: center;
+  text-transform: uppercase;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #999;
+  margin-bottom: 0.75rem;
+}
+
+.calendar-container .react-calendar__month-view__weekdays__weekday {
+  padding: 0.75rem 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #999;
+}
+
+.calendar-container .react-calendar__month-view__weekdays__weekday abbr {
+  text-decoration: none;
+  cursor: default;
+}
+
+.calendar-container .react-calendar__tile {
+  position: relative;
+  height: 3.75rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  color: inherit;
+}
+
+.calendar-container .react-calendar__tile:hover {
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 0.5rem;
+}
+
+.calendar-container .react-calendar__tile--now {
+  background: transparent;
+  font-weight: 700;
+}
+
+.calendar-container .react-calendar__month-view__days__day--neighboringMonth {
+  opacity: 0.3;
+}
+
+.calendar-container .react-calendar__month-view__days__day--weekend {
+  color: inherit;
+}

@@ -1,0 +1,132 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+   provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model User { 
+  id    Int     @id @default(autoincrement()) 
+  employeeName  String?
+  employeeId String? @unique
+  shift String?
+  email String  @unique
+  mobileNumber String  @unique
+  pin   String
+  deviceId String? @db.VarChar(625)
+  refreshToken String? @db.VarChar(625)
+  userType UserType @default(EMPLOYEE)
+  workLocation Json? 
+  weekendOff Json?
+  attendances Attendance[] 
+  specialAttendances SpecialAttendance[]
+  departmentId Int?
+  designationId Int?
+  leaves LeaveEmployee[]
+
+  department      Department? @relation(fields: [departmentId], references: [id])
+  designation     Designation? @relation(fields: [designationId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt @default(now())
+}
+
+model Attendance {
+  id        Int      @id @default(autoincrement())
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
+  date      DateTime
+  status    status @default(PRESENT)
+  checkInTime DateTime?
+  checkOutTime DateTime?
+  checkInLocation String?
+  checkOutLocation String?
+  checkInPhoto String?
+  checkOutPhoto String?
+  extraTime String?
+  checkoutOutside Boolean? @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SpecialAttendance {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user   User @relation(fields: [userId], references: [id])
+  date      DateTime
+  checkInTime DateTime?
+  checkOutTime DateTime?
+  checkInLocation String?
+  checkOutLocation String?
+  checkInPhoto String?
+  checkOutPhoto String?
+  workHours String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model LeaveAndHoliday {
+  id         Int      @id @default(autoincrement())
+  startDate  DateTime
+  endDate    DateTime
+  reason     String
+  status     Status   @default(LEAVE)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  employees LeaveEmployee[]
+}
+
+model LeaveEmployee {
+  id          Int @id @default(autoincrement())
+  leaveId     Int
+  employeeId  Int
+
+  leave LeaveAndHoliday @relation(fields: [leaveId], references: [id], onDelete: Cascade)
+  employee User @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([leaveId])
+  @@index([employeeId])
+}
+
+model Department {
+  id   Int    @id @default(autoincrement())
+  name String @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt @default(now())
+  users User[]
+}
+
+model Designation {
+  id   Int    @id @default(autoincrement())
+  name String @unique
+  users User[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt @default(now())
+}
+
+enum Status {
+  LEAVE
+  HOLIDAY
+}
+
+enum UserType {
+  EMPLOYEE
+  ADMIN
+  BODYGUARD
+}
+
+enum status {
+  PRESENT
+  OVERTIME
+  WORK_FROM_HOME
+  HALF_DAY
+  LATE
+}
