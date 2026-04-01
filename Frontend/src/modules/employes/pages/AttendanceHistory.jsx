@@ -68,7 +68,7 @@ const AttendanceHistory = () => {
     // Check if it's a weekend (Saturday or Sunday)
     const day = date.getDay();
     const userWeekOff = user.weekendOff;
-    if (userWeekOff.includes(day)) return "WEEKOFF";
+    if (userWeekOff?.includes(day)) return "WEEKOFF";
     return null;
   };
 
