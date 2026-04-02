@@ -272,7 +272,7 @@ export const checkIn = async (req, res) => {
 
       const status = !isTodayWeekOff(user.weekendOff)
         ? getAttendanceStatus(user.shift)
-        : "PRESENT";
+        : "OVERTIME";
 
       // if user late send notification to admin, without blocking the check-in process
       if (status === "LATE") {

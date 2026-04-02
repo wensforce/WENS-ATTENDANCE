@@ -190,7 +190,7 @@ export const isTodayWeekOff = (weekOff, day) => {
   if (typeof weekOff === "string") {
     weekOff = JSON.parse(weekOff);
   }
-  return weekOff.includes(today);
+  return weekOff ? weekOff.includes(today) : false;
 };
 
 export const getAttendanceStatus = (shift) => {
