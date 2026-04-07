@@ -59,9 +59,6 @@ export const login = async (req, res) => {
       data: { refreshToken },
     });
 
-    console.log(process.env.NODE_ENV === "production");
-    
-
     // set access token in HTTP-only cookie
     res.cookie("accessToken", accessToken, {
       httpOnly: true,
