@@ -16,7 +16,9 @@ const Navbar = () => {
   return (
      <div className='px-2 py-2 flex items-center justify-between bg-background'>
         <div className='flex items-center justify-center'>
-          <img className='w-10 h-10 mr-1' src="/icons/logo.png" alt="WENS Logo" />
+          <div className='w-10 h-10 flex items-center justify-center'>
+            <img className='w-full h-full object-contain' src="/icons/logo.png" alt="WENS Logo" />
+          </div>
           <h1 className='text-(--color-text-primary) font-semibold text-lg'>WENS</h1>
         </div>
         <button aria-label="Open notifications" className='p-2' onClick={() => setOpen(true)}>

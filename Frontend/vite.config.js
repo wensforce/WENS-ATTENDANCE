@@ -13,7 +13,7 @@ export default defineConfig({
 
       manifest: {
         name: "WENS Attendance App",
-        short_name: "Attendance",
+        short_name: "WENS Attendance",
         description: "Attendance tracking app",
         start_url: "/",
         display: "standalone",
