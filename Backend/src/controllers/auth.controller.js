@@ -63,13 +63,13 @@ export const login = async (req, res) => {
     res.cookie("accessToken", accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "strict" : "none", // for testing, change to "strict" in production // for testing, change to "strict" in production
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", // for testing, change to "strict" in production // for testing, change to "strict" in production
       maxAge: 15 * 60 * 1000, // 15 minutes
     });
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "strict" : "none", // for testing, change to "strict" in production // for testing, change to "strict" in production
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", // for testing, change to "strict" in production // for testing, change to "strict" in production
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
