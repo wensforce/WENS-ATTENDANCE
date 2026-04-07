@@ -14,6 +14,7 @@ import {
   LocateFixed,
   Navigation,
   ChevronDown,
+  Calendar,
 } from "lucide-react";
 import { useDepartmentApi } from "../../api/departmentApi";
 import { useDesignationApi } from "../../api/designationApi";
@@ -36,11 +37,14 @@ const DAYS = [
 
 const USER_TYPES = ["EMPLOYEE", "ADMIN", "BODYGUARD"];
 
+const todayISO = () => new Date().toISOString().split("T")[0];
+
 const EMPTY_FORM = {
   employeeName: "",
   email: "",
   mobileNumber: "",
   employeeId: "",
+  joinDate: todayISO(),
   departmentId: "",
   designationId: "",
   userType: "",
@@ -164,6 +168,7 @@ const EmployeeFormModal = ({
         email: editData.email ?? "",
         mobileNumber: editData.mobileNumber ?? "",
         employeeId: editData.employeeId ?? "",
+        joinDate: editData.joinDate ? editData.joinDate.split("T")[0] : todayISO(),
         departmentId: editData.departmentId ?? "",
         designationId: editData.designationId ?? "",
         userType: editData.userType ?? "",
@@ -354,7 +359,12 @@ const EmployeeFormModal = ({
       return;
     }
     setErrors({});
-    onSubmit(form);
+    // Convert joinDate to ISO-8601 DateTime format
+    const formData = {
+      ...form,
+      joinDate: form.joinDate ? new Date(form.joinDate + 'T00:00:00').toISOString() : null,
+    };
+    onSubmit(formData);
   };
 
   return (
@@ -416,6 +426,17 @@ const EmployeeFormModal = ({
                   value={form.employeeId}
                   onChange={set("employeeId")}
                   className={cls(errors.employeeId)}
+                />
+              </IconInput>
+            </Field>
+
+            <Field label="Joining Date" error={errors.joinDate}>
+              <IconInput icon={Calendar}>
+                <input
+                  type="date"
+                  value={form.joinDate}
+                  onChange={set("joinDate")}
+                  className={cls(errors.joinDate)}
                 />
               </IconInput>
             </Field>

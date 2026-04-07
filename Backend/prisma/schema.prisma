@@ -23,6 +23,7 @@ model User {
   pin   String
   deviceId String? @db.VarChar(625)
   refreshToken String? @db.VarChar(625)
+  joinDate DateTime?
   userType UserType @default(EMPLOYEE)
   workLocation Json? 
   weekendOff Json?

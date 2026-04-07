@@ -26,7 +26,6 @@ import AdminProtectedRoute from "./routes/AdminProtectedRoute";
 import UnprotectedRoute from "./routes/UnprotectedRoute";
 import {
   onForegroundMessage,
-  requestNotificationPermission,
 } from "./shared/hooks/usePushNotification";
 
 const LoadingFallback = () => (

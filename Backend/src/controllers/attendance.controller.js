@@ -363,6 +363,8 @@ export const checkOut = async (req, res) => {
       const maxAllowedMinutes = isDateChanged
         ? getUserShiftTimeInMinutes(user.shift) + 60
         : getUserShiftTimeInMinutes(user.shift); // allow 1 hour buffer if date changed
+
+
       if (timeDifferenceMinutes > maxAllowedMinutes) {
         return error(
           res,

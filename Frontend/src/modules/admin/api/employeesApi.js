@@ -63,8 +63,8 @@ export const employeesApi = {
     return response.data;
   },
 
-  resetEmployeePin: async (email) => {
-    const response = await api.post(`/admin/employee/reset-pin`, { email });
+  resetEmployeePin: async ({email, phoneNumber}) => {
+    const response = await api.post(`/admin/employee/reset-pin`, { email, phoneNumber });
     return response.data;
   }
 };

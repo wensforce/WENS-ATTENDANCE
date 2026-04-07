@@ -62,7 +62,7 @@ const Login = () => {
         navigate("/admin/dashboard");
       } else if (
         result.data.user.userType === "BODYGUARD" ||
-        result.data.user.userType === "EMPLOYE"
+        result.data.user.userType === "EMPLOYEE"
       ) {
         navigate("/");
       }
@@ -90,7 +90,7 @@ const Login = () => {
           <img
             src={wensLogo}
             alt="WENS Force Logo"
-            className="h-32 w-32 object-contain"
+            className="h-28 w-28 object-contain"
           />
         </div>
 
@@ -164,9 +164,9 @@ const Login = () => {
           <p className="text-text-secondary text-sm font-medium mb-2">
             Having trouble logging in?
           </p>
-          <button className="text-primary font-bold underline hover:opacity-70 transition">
+          <a href="mailto:hr@wensforce.com" className="text-primary font-bold underline hover:opacity-70 transition">
             Contact Support
-          </button>
+          </a>
         </div>
       </div>
     </div>

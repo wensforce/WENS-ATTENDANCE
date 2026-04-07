@@ -259,7 +259,7 @@ export const extraTime = (
 };
 
 export const getUserShiftTimeInMinutes = (shift) => {
-  // shift is in format "9:00 AM - 5:00 PM", we need to extract end time and convert to minutes
+  // shift is in format "13:53 - 15:54", we need to extract end time and convert to minutes
   const [startShift, endShift] = shift.split(" - ");
   const shiftStart = parseShiftTime(startShift);
   const shiftEnd = parseShiftTime(endShift);

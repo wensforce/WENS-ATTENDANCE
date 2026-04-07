@@ -241,9 +241,10 @@ const EmployeDetails = () => {
   const handleConfirmReset = async () => {
     setIsResetting(true);
     try {
-      const { data } = await employeesApi.resetEmployeePin(employee.email);
-      console.log(data);
-      
+      const { data } = await employeesApi.resetEmployeePin({
+        email: employee.email,
+        phoneNumber: employee.mobileNumber,
+      });
       setResetPin(data.tempPin || "N/A");
       setConfirmModalOpen(false);
       setPinModalOpen(true);

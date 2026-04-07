@@ -15,10 +15,10 @@ import { toast } from "react-toastify";
 import calenderApi from "../api/attendanceApi";
 import useAuth from "../../login/hooks/useAuth";
 import { formatDate } from "../../../shared/utils/dateUtil";
-import SpinLoading from "../../../shared/components/SpinLoading";
+import AttendanceDetailsLoading from "../components/attendance/AttendanceDetailsLoading";
 
 const AttendanceHistory = () => {
-  const [selectedMonth, setSelectedMonth] = useState(new Date(2026, 2, 1)); // February 2026
+  const [selectedMonth, setSelectedMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
   const [attendanceData, setAttendanceData] = useState([]);
   const [attendanceDetails, setAttendanceDetails] = useState(null);
@@ -54,7 +54,6 @@ const AttendanceHistory = () => {
   //   };
   // };
   // const stats = calculateStats();
-
 
   // Get status for a specific date
   const getDateStatus = (date) => {
@@ -123,58 +122,15 @@ const AttendanceHistory = () => {
     year: "numeric",
   });
 
-  const handleDayClick = (date) => {
+  const handleDayClick = async (date) => {
     const status = getDateStatus(date);
 
     if (status) {
-      setDetailsLoading(true);
-      // Open modal with attendance details for the selected date
       const findData = attendanceData.find(
         (item) => item.date?.split("T")[0] === formatDate(date),
       );
 
-      if (findData?.id) {
-        calenderApi
-          .getAttendanceDetails(findData.id)
-          .then((res) => {
-            console.log("Attendance details:", res.data);
-            setAttendanceDetails(res.data);
-          })
-          .catch((error) => {
-            toast.error(
-              error.message ||
-                "Error fetching attendance details. Please try again later.",
-            );
-          });
-      }
-      if (findData?.specialId) {
-        calenderApi
-          .getSpecialDayAttendance(findData.specialId)
-          .then((res) => {
-            console.log("Special day details:", res.data);
-            setSpecialDayDetails(res.data);
-          })
-          .catch((error) => {
-            toast.error(
-              error.message ||
-                "Error fetching special day details. Please try again later.",
-            );
-          });
-      }
-      if (findData?.holidayId) {
-        calenderApi
-          .getHolidayAttendance(findData.holidayId)
-          .then((res) => {
-            console.log("Holiday details:", res.data);
-            setHolidayDetails(res.data);
-          })
-          .catch((error) => {
-            toast.error(
-              error.message ||
-                "Error fetching holiday details. Please try again later.",
-            );
-          });
-      }
+      // ABSENT has no API call — open immediately
       if (findData?.status === "ABSENT") {
         setAttendanceDetails({
           status: findData.status,
@@ -184,11 +140,49 @@ const AttendanceHistory = () => {
             day: "numeric",
           }),
         });
+        setSelectedDate(date);
+        return;
       }
 
+      setDetailsLoading(true);
       setSelectedDate(date);
-      // You can set state to open the modal and pass the relevant data
-      setDetailsLoading(false);
+
+      try {
+        const calls = [];
+
+        if (findData?.id) {
+          calls.push(
+            calenderApi.getAttendanceDetails(findData.id).then((res) => {
+              setAttendanceDetails(res.data);
+            }),
+          );
+        }
+        if (findData?.specialId) {
+          calls.push(
+            calenderApi
+              .getSpecialDayAttendance(findData.specialId)
+              .then((res) => {
+                setSpecialDayDetails(res.data);
+              }),
+          );
+        }
+        if (findData?.holidayId) {
+          calls.push(
+            calenderApi.getHolidayAttendance(findData.holidayId).then((res) => {
+              setHolidayDetails(res.data);
+            }),
+          );
+        }
+
+        await Promise.all(calls);
+      } catch (error) {
+        toast.error(
+          error.message ||
+            "Error fetching attendance details. Please try again later.",
+        );
+      } finally {
+        setDetailsLoading(false);
+      }
     }
   };
 
@@ -214,8 +208,11 @@ const AttendanceHistory = () => {
 
   return (
     <main className="min-h-screen bg-background pb-24">
-      {attendanceDetails?.status === "ABSENT" && (
-        <Suspense fallback={<SpinLoading />}>
+      {/* ── Skeleton shown while API data is loading ── */}
+      {detailsLoading && <AttendanceDetailsLoading />}
+
+      {!detailsLoading && attendanceDetails?.status === "ABSENT" && (
+        <Suspense fallback={<AttendanceDetailsLoading />}>
           <AbsentModal
             isOpen={selectedDate !== null}
             onClose={() => {
@@ -228,13 +225,13 @@ const AttendanceHistory = () => {
         </Suspense>
       )}
 
-      {(attendanceDetails?.status === "PRESENT_SPECIAL" ||
+      {!detailsLoading && (attendanceDetails?.status === "PRESENT_SPECIAL" ||
         attendanceDetails?.status === "OVERTIME" ||
         attendanceDetails?.status === "HALF_DAY" ||
         attendanceDetails?.status === "WORK_FROM_HOME" ||
         attendanceDetails?.status === "LATE" ||
         attendanceDetails?.status === "PRESENT") && (
-        <Suspense fallback={<SpinLoading />}>
+        <Suspense fallback={<AttendanceDetailsLoading />}>
           <AttendanceDetailsModal
             isOpen={selectedDate !== null}
             onClose={() => {
@@ -248,9 +245,9 @@ const AttendanceHistory = () => {
           />
         </Suspense>
       )}
-      {(holidayDetails?.status === "HOLIDAY" ||
+      {!detailsLoading && (holidayDetails?.status === "HOLIDAY" ||
         holidayDetails?.status === "LEAVE") && (
-        <Suspense fallback={<SpinLoading />}>
+        <Suspense fallback={<AttendanceDetailsLoading />}>
           <HolydayDeatilsModal
             isOpen={selectedDate !== null}
             onClose={() => {
@@ -284,7 +281,12 @@ const AttendanceHistory = () => {
 
       {/* Calendar */}
       <div className="px-4 mt-6">
-        <div className="bg-surface flex items-center justify-center rounded-2xl shadow-xs border border-primary/10 p-6 calendar-container">
+        <div className="relative bg-surface flex items-center justify-center rounded-2xl shadow-xs border border-primary/10 p-6 calendar-container">
+          {detailsLoading && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-surface/70 rounded-2xl backdrop-blur-sm">
+              <div className="w-8 h-8 border-4 border-border border-t-text-primary rounded-full animate-spin" />
+            </div>
+          )}
           <Calendar
             value={selectedMonth}
             activeStartDate={selectedMonth}

@@ -16,6 +16,7 @@ export const registerEmployee = async (req, res) => {
       shift,
       workLocation,
       weekendOff,
+      joinDate,
     } = req.body;
     // Check if user already exists
     const existingUser = await prisma.user.findFirst({
@@ -46,6 +47,7 @@ export const registerEmployee = async (req, res) => {
         weekendOff,
         userType: userType,
         pin: hashedPin,
+        joinDate: joinDate,
       },
     });
 
@@ -106,6 +108,7 @@ export const getAllEmployees = async (req, res) => {
           weekendOff: true,
           shift: true,
           userType: true,
+          joinDate: true,
         },
       }),
       prisma.user.count(),
@@ -179,6 +182,7 @@ export const updateEmployee = async (req, res) => {
       shift,
       workLocation,
       weekendOff,
+      joinDate,
     } = req.body;
     const employee = await prisma.user.update({
       where: { id: parseInt(id) },
@@ -189,6 +193,7 @@ export const updateEmployee = async (req, res) => {
         shift,
         workLocation,
         weekendOff,
+        joinDate,
       },
     });
     return responses.updated(res, employee);

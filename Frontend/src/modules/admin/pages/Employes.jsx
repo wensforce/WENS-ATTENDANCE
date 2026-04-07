@@ -93,6 +93,15 @@ const buildColumns = () => [
       </div>
     ),
   },
+  {
+    header:"joining date",
+    key:"joinDate",
+    render:(row) => (
+      <span className="text-text-secondary text-sm">
+        {row.joinDate ? new Date(row.joinDate).toLocaleDateString() : "N/A"}
+      </span>
+    )
+  }
 ];
 
 // ─── Employees Page ───────────────────────────────────────────────────────────
