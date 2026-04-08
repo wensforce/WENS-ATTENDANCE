@@ -157,8 +157,15 @@ export const logout = async (req, res) => {
       data: { refreshToken: null },
     });
     // Clear cookies
-    res.clearCookie("accessToken");
-    res.clearCookie("refreshToken");
+    const cookieOptions = {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      path: "/", // important to be explicit
+    };
+
+    res.clearCookie("accessToken", cookieOptions);
+    res.clearCookie("refreshToken", cookieOptions);
     return responses.logoutSuccess(res);
   } catch (error) {
     console.error("Logout error:", error);

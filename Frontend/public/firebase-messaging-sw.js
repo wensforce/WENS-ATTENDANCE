@@ -21,7 +21,7 @@ messaging.onBackgroundMessage((payload) => {
   const notificationTitle = payload.notification?.title || "Background Notification";
   const notificationOptions = {
     body: payload.notification?.body || "",
-    icon: "/logo192.png", // optional
+    icon: "/icons/android-chrome-192x192.png", // optional
   };
 
   self.registration.showNotification(notificationTitle, notificationOptions);
