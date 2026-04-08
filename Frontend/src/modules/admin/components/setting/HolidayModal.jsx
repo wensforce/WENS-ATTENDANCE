@@ -13,7 +13,6 @@ const HolidayModal = ({
     status: "HOLIDAY",
     startDate: "",
     endDate: "",
-    type: "PUBLIC",
     reason: "",
     employeeIds: [],
   });

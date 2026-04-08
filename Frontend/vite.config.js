@@ -51,6 +51,7 @@ export default defineConfig({
       },
 
       workbox: {
+        importScripts: ["/firebase-messaging-sw.js"],
         globPatterns: ["**/*.{js,css,html,png,svg,ico}"],
         navigateFallback: "/index.html",
         runtimeCaching: [

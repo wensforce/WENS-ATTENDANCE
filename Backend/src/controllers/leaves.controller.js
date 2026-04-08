@@ -1,6 +1,7 @@
 import prisma from "../../lib/prisma.js";
 import { success, responses } from "../utils/response.js";
-
+import sendNotification from "../services/sendNotification.js";
+import { formatForDisplay } from "../utils/dateFormat.js";
 //return today's leaves and holidays for the user
 export const getLeavesAndHolidays = async (req, res) => {
   try {
@@ -59,10 +60,10 @@ export const getLeaveAndHolidayById = async (req, res) => {
 
 export const createLeaveAndHoliday = async (req, res) => {
   try {
-    const { type, startDate, endDate, reason, employeeIds } = req.body;
+    const { status, startDate, endDate, reason, employeeIds } = req.body;
     const newLeaveAndHoliday = await prisma.leaveAndHoliday.create({
       data: {
-        type,
+        status,
         startDate: new Date(startDate),
         endDate: new Date(endDate),
         reason,
@@ -74,7 +75,7 @@ export const createLeaveAndHoliday = async (req, res) => {
       },
     });
 
-    // send notification to all employees affected by the new leave or holiday, withput blocking the response
+    // send notification to all employees affected by the new leave or holiday, without blocking the response
 
     if (employeeIds.length > 0) {
       // fetch device tokens of the affected employees
@@ -89,12 +90,12 @@ export const createLeaveAndHoliday = async (req, res) => {
         },
       });
       // send notifications to the affected employees
-      const tokens = deviceTokens.map((dt) => dt.deviceToken).filter(Boolean);
+      const tokens = deviceTokens.map((dt) => dt.deviceId).filter(Boolean);
       if (tokens.length > 0) {
         sendNotification(
           tokens,
-          `A new ${type} has been created`,
-          `From ${startDate} to ${endDate}. Reason: ${reason}`,
+          `A new ${status} has been created`,
+          `From ${formatForDisplay(new Date(startDate))} to ${formatForDisplay(new Date(endDate))}. Reason: ${reason}`,
         );
       }
     }
