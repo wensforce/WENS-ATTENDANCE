@@ -282,8 +282,7 @@ export const checkIn = async (req, res) => {
             select: { deviceId: true },
           })
           .then((admins) => {
-            const tokens = admins
-              .map((admin) => admin.deviceId)
+            const tokens = admins.map((admin) => admin.deviceId);
 
             if (tokens.length > 0) {
               sendNotification(
@@ -360,17 +359,16 @@ export const checkOut = async (req, res) => {
       const isDateChanged = checkInDate !== checkOutDate;
 
       // user shift is in format "9:00 AM - 5:00 PM", we need to extract end time and convert to minutes
-      const maxAllowedMinutes = isDateChanged
-        ? getUserShiftTimeInMinutes(user.shift) + 60
-        : getUserShiftTimeInMinutes(user.shift); // allow 1 hour buffer if date changed
+      if (isDateChanged) {
+        const maxAllowedMinutes = getUserShiftTimeInMinutes(user.shift) + 60; // 60 min buffer
 
-
-      if (timeDifferenceMinutes > maxAllowedMinutes) {
-        return error(
-          res,
-          400,
-          "Cannot checkout from a check-in that was more than 24 hours ago",
-        );
+        if (timeDifferenceMinutes > maxAllowedMinutes) {
+          return error(
+            res,
+            400,
+            "Checkout time exceeded allowed buffer after date change",
+          );
+        }
       }
 
       Promise.all([
@@ -740,7 +738,7 @@ export const specialDutyCheckOut = async (req, res) => {
         const workHours = calculateWorkHours(
           existingAttendance.checkInTime,
           new Date(),
-        )
+        );
 
         // update record with check-out details
         const updatedAttendance = await prisma.SpecialAttendance.update({
