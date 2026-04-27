@@ -55,12 +55,10 @@ app.use("/api/v1/report", report);
 app.use("/api/v1/notifications", notificationRoutes);
 
 
-// 👇 Serve React build (AFTER API routes, this order matters!)
-app.use(express.static(path.join(__dirname, "../frontend/build")));
+app.use(express.static(path.join(__dirname, "../../Frontend/build")));
 
-// 👇 Catch-all: send React's index.html for any non-API route
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/build/index.html'));
+  res.sendFile(path.join(__dirname, '../../Frontend/build/index.html'));
 });
 
 
