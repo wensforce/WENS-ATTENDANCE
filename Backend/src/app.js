@@ -12,6 +12,11 @@ import notificationRoutes from "./routes/notification.route.js";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 
@@ -48,6 +53,15 @@ app.use("/api/v1/department", departmentRoutes);
 app.use("/api/v1/designation", designationRoutes);
 app.use("/api/v1/report", report);
 app.use("/api/v1/notifications", notificationRoutes);
+
+
+// 👇 Serve React build (AFTER API routes, this order matters!)
+app.use(express.static(path.join(__dirname, "../frontend/build")));
+
+// 👇 Catch-all: send React's index.html for any non-API route
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/build/index.html'));
+});
 
 
 export default app;
