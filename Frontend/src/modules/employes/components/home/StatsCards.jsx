@@ -31,7 +31,7 @@ const StatsCards = ({totalExtraTime,lateCheckIns,isUndertime}) => {
           <div>
             <p className="text-sm text-text-secondary">Late Check In</p>
             <p className="text-base font-medium text-text-primary">
-              {lateCheckIns}
+              {lateCheckIns || "N/A"}
             </p>
           </div>
         </div>

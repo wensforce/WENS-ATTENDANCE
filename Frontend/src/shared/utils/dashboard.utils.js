@@ -1,5 +1,6 @@
 // convert this format "00:00" HH:MM to "0hrs 00min"
 export const formatOverTime = (data) => {
+  if (!data) return "N/A";
   const [hours, minutes] = data.split(":").map(Number);
   return `${hours}hrs ${minutes}min`;
 };

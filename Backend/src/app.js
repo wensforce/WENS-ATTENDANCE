@@ -11,9 +11,22 @@ import report from "./routes/report.route.js";
 import notificationRoutes from "./routes/notification.route.js";
 import cookieParser from "cookie-parser";
 import cors from "cors";
+import rateLimit from "express-rate-limit";
 
 const app = express();
+
+// add retry-after header for rate limit errors
+const limiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 50, // Limit each IP to 50 requests per windowMs
+  message: {
+    status: "error",
+    message: "Too many requests from this IP, please try again after 15 minutes",
+  },
+});
+
 app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
+app.use(limiter);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());

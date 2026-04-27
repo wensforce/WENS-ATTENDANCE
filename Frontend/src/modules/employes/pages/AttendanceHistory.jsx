@@ -199,6 +199,7 @@ const AttendanceHistory = () => {
         }
       })
       .catch((error) => {
+        if(error.handled === true) return;
         toast.error(
           error.message ||
             "Error fetching attendance summary. Please try again later.",

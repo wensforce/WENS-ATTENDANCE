@@ -1,4 +1,5 @@
 import axios from "axios";
+import { toast } from "react-toastify";
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
@@ -9,7 +10,7 @@ const api = axios.create({
   },
 });
 
-const REFRESH_TOKEN_ENDPOINT = "/auth/refresh-token"; 
+const REFRESH_TOKEN_ENDPOINT = "/auth/refresh-token";
 
 let isRefreshing = false;
 let failedQueue = [];
@@ -40,12 +41,16 @@ api.interceptors.response.use(
     const isRefreshRequest =
       originalRequest.url &&
       originalRequest.url.includes(REFRESH_TOKEN_ENDPOINT);
-    const isLoginRequest = 
-    originalRequest.url &&
-    originalRequest.url.includes("/auth/login");
+    const isLoginRequest =
+      originalRequest.url && originalRequest.url.includes("/auth/login");
 
     // Only try refresh once per original request and never for the refresh call itself
-    if (!isUnauthorized || isRefreshRequest || originalRequest._retry || isLoginRequest) {
+    if (
+      !isUnauthorized ||
+      isRefreshRequest ||
+      originalRequest._retry ||
+      isLoginRequest
+    ) {
       return Promise.reject(error);
     }
 
@@ -76,6 +81,21 @@ api.interceptors.response.use(
     } finally {
       isRefreshing = false;
     }
+  },
+);
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+
+    if (error.response?.status === 429) {
+      toast.error(`Too many requests. Please wait 1 minute and try again.`, {
+        id: "rate-limit",
+        duration: 4000,
+      });
+      error.handled = true;
+    }
+    return Promise.reject(error);
   },
 );
 
