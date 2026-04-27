@@ -1,8 +1,10 @@
 node_modules
 Frontend/node_modules
 Backend/node_modules
-Frontend/build
+Frontend/dist
 .env
+Frontend/.env
+Backend/.env
 .git
 *.log
 .DS_Store
