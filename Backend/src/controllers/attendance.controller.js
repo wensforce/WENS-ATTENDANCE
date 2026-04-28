@@ -420,10 +420,14 @@ export const checkOut = async (req, res) => {
             checkOutPhoto: checkOutImageKey,
             extraTime: overTime,
             checkoutOutside: !isValidLocation,
-            status:
-              isHoliday || isTodayWeekOff(user.weekendOff)
-                ? "OVERTIME"
-                : "PRESENT",
+            // status:
+            //   isHoliday || isTodayWeekOff(user.weekendOff)
+            //     ? "OVERTIME"
+            //     : "PRESENT",
+
+            ...(isHoliday || isTodayWeekOff(user.weekendOff)
+              ? { status: "OVERTIME" }
+              : {}),
           },
         });
 
