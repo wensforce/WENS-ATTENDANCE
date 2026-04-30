@@ -5,6 +5,11 @@ import useNotificationApi from "../api/notificationApi";
 const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY;
 
 export const requestNotificationPermission = async () => {
+  if (!messaging) {
+    console.warn("Push notifications are not supported in this browser.");
+    return null;
+  }
+
   try {
     const permission = await Notification.requestPermission();
     if (permission !== "granted") return null;
@@ -14,7 +19,7 @@ export const requestNotificationPermission = async () => {
 
     const token = await getToken(messaging, {
       vapidKey: VAPID_KEY,
-      serviceWorkerRegistration: registration, // ✅ pass it directly
+      serviceWorkerRegistration: registration,
     });
     
     console.log("Firebase token:", token);
@@ -37,5 +42,6 @@ const saveTokenToBackend = async (token) => {
 };
 
 export const onForegroundMessage = (callback) => {
+  if (!messaging) return () => {};
   return onMessage(messaging, callback);
 };

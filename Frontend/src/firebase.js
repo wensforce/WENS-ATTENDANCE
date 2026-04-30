@@ -1,8 +1,12 @@
-// Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
-import { getMessaging } from "firebase/messaging";
+import { getMessaging, isSupported } from "firebase/messaging";
 import firebaseConfig from "./firebaseConfig";
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
-export const messaging = getMessaging(app);
+
+// getMessaging() requires Service Workers, Push API, and Notification API.
+// Guard it so unsupported browsers (some mobile browsers, older Safari, etc.)
+// don't throw at module load time.
+export const messaging = await isSupported()
+  .then((supported) => (supported ? getMessaging(app) : null))
+  .catch(() => null);
