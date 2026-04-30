@@ -23,10 +23,10 @@ const app = express();
 // add retry-after header for rate limit errors
 const limiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
-  max: 50, // Limit each IP to 50 requests per windowMs
+  max: 300, // Limit each IP to 300 requests per windowMs
   message: {
     status: "error",
-    message: "Too many requests from this IP, please try again after 15 minutes",
+    message: "Too many requests from this IP, please try again after 1 minute",
   },
 });
 
