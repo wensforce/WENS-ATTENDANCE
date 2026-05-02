@@ -1,16 +1,18 @@
 import React, { useEffect, useState } from "react";
 import { X, Loader2, Building2 } from "lucide-react";
 
-const DepartmentCreateModal = ({ open, onClose, onSubmit, loading = false }) => {
+const DepartmentCreateModal = ({ open, onClose, onSubmit, loading = false, initialValue = null }) => {
   const [name, setName] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (open) {
-      setName("");
+      console.log(initialValue);
+      
+      setName(initialValue);
       setError("");
     }
-  }, [open]);
+  }, [open, initialValue]);
 
   useEffect(() => {
     const handleKey = (e) => {
