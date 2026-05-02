@@ -30,7 +30,7 @@ ENV VITE_FIREBASE_MEASUREMENT_ID=$VITE_FIREBASE_MEASUREMENT_ID
 COPY Frontend/package*.json ./
 RUN npm ci
 COPY Frontend/ ./
-RUN npm run build
+RUN NODE_OPTIONS="--max-old-space-size=1536" npm run build
 
 # ----- Stage 2: Backend with Prisma + serve React -----
 FROM node:20-alpine
@@ -56,4 +56,4 @@ WORKDIR /app/Backend
 EXPOSE 3000
 
 # Run migrations then start server
-CMD npx prisma migrate deploy && node index.js
+CMD node index.js
