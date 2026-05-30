@@ -261,13 +261,16 @@ export const checkIn = async (req, res) => {
         return error(res, 400, "Invalid user or check-in image");
       }
 
-      const isValidLocation = verifyLocation(lat, lng, user.workLocation);
-      if (!isValidLocation) {
-        return error(
-          res,
-          400,
-          "You are not within the allowed check-in location",
-        );
+      if (user.userType !== "BODYGUARD") {
+        const isValidLocation = verifyLocation(lat, lng, user.workLocation);
+
+        if (!isValidLocation) {
+          return error(
+            res,
+            400,
+            "You are not within the allowed check-in location",
+          );
+        }
       }
 
       const status = !isTodayWeekOff(user.weekendOff)
