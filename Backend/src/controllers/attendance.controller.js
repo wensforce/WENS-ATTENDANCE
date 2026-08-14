@@ -13,6 +13,7 @@ import { batchPresignUrls, uploadFile } from "../services/storage.service.js";
 import { success, error } from "../utils/response.js";
 import { verifyLocation } from "../utils/verifyLocation.js";
 import sendNotification from "../services/sendNotification.js";
+import { sendWebhooks } from "../utils/webhook.js";
 
 export const getAllAttendance = async (req, res) => {
   try {
@@ -255,6 +256,10 @@ export const checkIn = async (req, res) => {
         : null,
       prisma.user.findUnique({
         where: { id: userId },
+        include: {
+          department: true,
+          designation: true,
+        },
       }),
     ]).then(async ([checkInImageKey, user]) => {
       if (!user || !checkInImageKey) {
@@ -310,6 +315,17 @@ export const checkIn = async (req, res) => {
         },
       });
 
+      sendWebhooks("check_in", {
+        employeName: user.employeeName,
+        dateAndTime: attendance.checkInTime,
+        location: attendance.checkInLocation,
+        status: attendance.status,
+        employeeType: user.userType,
+        employeeShift: user.shift,
+        employeeDepartment: user.department?.name,
+        employeeDesignation: user.designation?.name,
+      });
+
       return success(res, 201, "Check-in successful", attendance);
     });
   } catch (err) {
@@ -336,6 +352,10 @@ export const checkOut = async (req, res) => {
     Promise.all([
       prisma.user.findUnique({
         where: { id: userId },
+        include: {
+          department: true,
+          designation: true,
+        },
       }),
       prisma.attendance.findFirst({
         where: {
@@ -434,11 +454,20 @@ export const checkOut = async (req, res) => {
           },
         });
 
+        sendWebhooks("check_out", {
+          employeName: user.employeeName,
+          dateAndTime: updatedAttendance.checkOutTime,
+          location: updatedAttendance.checkOutLocation,
+          status: updatedAttendance.status,
+          employeeType: user.userType,
+          employeeShift: user.shift,
+          employeeDepartment: user.department?.name,
+          employeeDesignation: user.designation?.name,
+        });
+
         return success(res, 200, "Check-out successful", updatedAttendance);
       });
     });
-
-    console.log("end");
   } catch (err) {
     console.error("Check-out error:", err);
     return error(res, 500, "Internal server error");

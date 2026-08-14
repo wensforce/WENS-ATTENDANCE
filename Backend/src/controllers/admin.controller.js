@@ -1,7 +1,12 @@
 import prisma from "../../lib/prisma.js";
 import { responses, success } from "../utils/response.js";
 import bcrypt from "bcryptjs";
-import { generatePinResetEmail, generateWelcomeEmail, sendEmail } from "../services/mail.service.js";
+import {
+  generatePinResetEmail,
+  generateWelcomeEmail,
+  sendEmail,
+} from "../services/mail.service.js";
+import { sendWebhooks } from "../utils/webhook.js";
 
 export const registerEmployee = async (req, res) => {
   try {
@@ -51,12 +56,24 @@ export const registerEmployee = async (req, res) => {
       },
     });
 
-    const mailContent = generateWelcomeEmail(user.employeeName, user.mobileNumber, tempPin);
-    await sendEmail(
-      user.email,
-      "Welcome to WENS FORCE - Your Account Details",
-      mailContent,
+    const mailContent = generateWelcomeEmail(
+      user.employeeName,
+      user.mobileNumber,
+      tempPin,
     );
+
+    sendWebhooks("user_registered", {
+      email: user.email,
+      employeeName: user.employeeName,
+      mobileNumber: user.mobileNumber,
+      employeeId: user.employeeId,
+      departmentId: user.departmentId,
+      designationId: user.designationId,
+      userType: user.userType,
+      shift: user.shift,
+      workLocation: user.workLocation,
+      weekendOff: user.weekendOff,
+    });
 
     return responses.created(res, {
       email: user.email,
@@ -71,6 +88,13 @@ export const registerEmployee = async (req, res) => {
       weekendOff: user.weekendOff,
       pin: tempPin, // In real application, you would send this via email/SMS instead of returning in response
     });
+
+    await sendEmail(
+      user.email,
+      "Welcome to WENS FORCE - Your Account Details",
+      mailContent,
+    );
+    
   } catch (error) {
     console.error("Registration error:", error);
     responses.serverError(res, "Internal server error");
@@ -83,7 +107,7 @@ export const getAllEmployees = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
-  
+
     let [employees, totalCount] = await Promise.all([
       prisma.user.findMany({
         where: {

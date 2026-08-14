@@ -9,6 +9,7 @@ import departmentRoutes from "./routes/department.route.js";
 import designationRoutes from "./routes/designation.route.js";
 import report from "./routes/report.route.js";
 import notificationRoutes from "./routes/notification.route.js";
+import webhookRoutes from "./routes/webhook.route.js";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
@@ -53,6 +54,7 @@ app.use("/api/v1/department", departmentRoutes);
 app.use("/api/v1/designation", designationRoutes);
 app.use("/api/v1/report", report);
 app.use("/api/v1/notifications", notificationRoutes);
+app.use("/api/v1/webhook", webhookRoutes);
 
 
 app.use(express.static(path.join(__dirname, "../../Frontend/dist")));

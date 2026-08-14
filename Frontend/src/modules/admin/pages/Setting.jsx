@@ -14,6 +14,8 @@ import { useHolidayApi } from "../api/holidayApi.js";
 import { employeesApi } from "../api/employeesApi.js";
 import DepartmentCreateModal from "../components/DepartmentCreateModal.jsx";
 import DesignationCreateModal from "../components/DesignationCreateModal.jsx";
+import WebhookCreateModal from "../components/WebhookCreateModal.jsx";
+import { useWebhookApi } from "../api/webhookApi.js";
 import DataTable from "../components/DataTable.jsx";
 import ConfirmModal from "../../../shared/components/ConfirmModal.jsx";
 import { StatCard, SectionHeader, HolidayModal, QuickListCard } from "../components/setting/index.js";
@@ -28,6 +30,7 @@ const TABS = [
   { id: "designations", label: "Designations", icon: Briefcase },
   { id: "holidays", label: "Holidays", icon: Calendar },
   { id: "payslip", label: "Pay Slip", icon: DollarSign },
+  { id: "webhook", label: "Webhook", icon: LayoutGrid },
 ];
 
 // ─── Main Component ───────────────────────────────────────────────────────
@@ -64,6 +67,15 @@ const Setting = () => {
   const [holidayDeleteLoading, setHolidayDeleteLoading] = useState(false);
   const [holidayMonth, setHolidayMonth] = useState(new Date().getMonth() + 1);
   const [holidayYear, setHolidayYear] = useState(new Date().getFullYear());
+
+  // ── Webhooks ──
+  const [webhooks, setWebhooks] = useState([]);
+  const [webhookLoading, setWebhookLoading] = useState(true);
+  const [webhookModalOpen, setWebhookModalOpen] = useState(false);
+  const [webhookSubmitting, setWebhookSubmitting] = useState(false);
+  const [editingWebhook, setEditingWebhook] = useState(null);
+  const [deletingWebhook, setDeletingWebhook] = useState(null);
+  const [webhookDeleteLoading, setWebhookDeleteLoading] = useState(false);
 
   // ── Employees (for PaySlip) ──
   const [employees, setEmployees] = useState([]);
@@ -113,6 +125,19 @@ const Setting = () => {
     }
   };
 
+  const fetchWebhooks = async () => {
+    setWebhookLoading(true);
+    try {
+      const { data } = await useWebhookApi.fetchWebhook();
+      const list = data?.webhooks || data;
+      setWebhooks(Array.isArray(list) ? list : []);
+    } catch {
+      toast.error("Failed to load webhooks");
+    } finally {
+      setWebhookLoading(false);
+    }
+  };
+
   const fetchEmployees = async () => {
     try {
       const { data } = await employeesApi.fetchAllEmployees(1);
@@ -127,6 +152,7 @@ const Setting = () => {
     fetchDesignations();
     fetchHolidays(holidayMonth, holidayYear);
     fetchEmployees();
+    fetchWebhooks();
   }, []);
 
   useEffect(() => {
@@ -205,6 +231,42 @@ const Setting = () => {
     }
   };
 
+  // ── Webhook CRUD ──
+
+  const handleWebhookSubmit = async (formData) => {
+    setWebhookSubmitting(true);
+    try {
+      if (editingWebhook) {
+        await useWebhookApi.updateWebhook(editingWebhook.id, formData);
+        toast.success("Webhook updated");
+      } else {
+        await useWebhookApi.createWebhook(formData);
+        toast.success("Webhook created");
+      }
+      setWebhookModalOpen(false);
+      setEditingWebhook(null);
+      fetchWebhooks();
+    } catch {
+      toast.error(editingWebhook ? "Failed to update webhook" : "Failed to create webhook");
+    } finally {
+      setWebhookSubmitting(false);
+    }
+  };
+
+  const handleWebhookDelete = async () => {
+    setWebhookDeleteLoading(true);
+    try {
+      await useWebhookApi.deleteWebhook(deletingWebhook.id);
+      toast.success("Webhook deleted");
+      setDeletingWebhook(null);
+      fetchWebhooks();
+    } catch {
+      toast.error("Failed to delete webhook");
+    } finally {
+      setWebhookDeleteLoading(false);
+    }
+  };
+
   // ── Holiday CRUD ──
 
   const handleHolidaySubmit = async (formData) => {
@@ -278,6 +340,34 @@ const Setting = () => {
           </div>
           <span className="text-sm font-medium text-text-primary">{row.name}</span>
         </div>
+      ),
+    },
+    {
+      header: "Created",
+      key: "createdAt",
+      render: (row) => (
+        <span className="text-sm text-text-muted">
+          {row.createdAt ? new Date(row.createdAt).toLocaleDateString() : "—"}
+        </span>
+      ),
+    },
+  ];
+
+  const webhookColumns = [
+    {
+      header: "Endpoint URL",
+      key: "url",
+      render: (row) => (
+        <span className="text-sm text-text-primary font-mono break-all">{row.url}</span>
+      ),
+    },
+    {
+      header: "Event",
+      key: "event",
+      render: (row) => (
+        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-background border border-border text-text-secondary">
+          {row.eventType}
+        </span>
       ),
     },
     {
@@ -625,6 +715,30 @@ const Setting = () => {
           </section>
         )}
 
+        {/* ════ WEBHOOK TAB ════ */}
+        {activeTab === "webhook" && (
+          <section className="bg-surface rounded-xl border border-border shadow-sm">
+            <SectionHeader
+              title="Webhooks"
+              count={webhooks.length}
+              onAdd={() => { setEditingWebhook(null); setWebhookModalOpen(true); }}
+              addLabel="Add Webhook"
+            />
+            <div className="p-4 overflow-x-auto">
+              <DataTable
+                columns={webhookColumns}
+                rows={webhooks}
+                rowIdKey="id"
+                selectable={false}
+                loading={webhookLoading}
+                onEdit={(row) => { setEditingWebhook(row); setWebhookModalOpen(true); }}
+                onDelete={(row) => setDeletingWebhook(row)}
+                emptyText="No webhooks yet. Add your first webhook."
+              />
+            </div>
+          </section>
+        )}
+
         {/* ════ PAY SLIP TAB ════ */}
         {activeTab === "payslip" && (
           <section className="bg-surface rounded-xl border border-border shadow-sm p-6">
@@ -691,6 +805,26 @@ const Setting = () => {
         isDangerous
         title="Delete Holiday"
         message={`Are you sure you want to delete "${deletingHoliday?.name}"?`}
+        confirmText="Delete"
+        cancelText="Cancel"
+      />
+
+      <WebhookCreateModal
+        open={webhookModalOpen}
+        onClose={() => { setWebhookModalOpen(false); setEditingWebhook(null); }}
+        onSubmit={handleWebhookSubmit}
+        loading={webhookSubmitting}
+        initialData={editingWebhook}
+      />
+
+      <ConfirmModal
+        open={!!deletingWebhook}
+        onClose={() => setDeletingWebhook(null)}
+        onConfirm={handleWebhookDelete}
+        loading={webhookDeleteLoading}
+        isDangerous
+        title="Delete Webhook"
+        message={`Are you sure you want to delete the webhook for "${deletingWebhook?.event}"?`}
         confirmText="Delete"
         cancelText="Cancel"
       />

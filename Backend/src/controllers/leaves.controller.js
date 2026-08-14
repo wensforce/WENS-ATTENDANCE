@@ -2,6 +2,7 @@ import prisma from "../../lib/prisma.js";
 import { success, responses } from "../utils/response.js";
 import sendNotification from "../services/sendNotification.js";
 import { formatForDisplay } from "../utils/dateFormat.js";
+import { sendWebhooks } from "../utils/webhook.js";
 //return today's leaves and holidays for the user
 export const getLeavesAndHolidays = async (req, res) => {
   try {
@@ -77,9 +78,10 @@ export const createLeaveAndHoliday = async (req, res) => {
 
     // send notification to all employees affected by the new leave or holiday, without blocking the response
 
+    let deviceTokens = [];
     if (employeeIds.length > 0) {
       // fetch device tokens of the affected employees
-      const deviceTokens = await prisma.user.findMany({
+      deviceTokens = await prisma.user.findMany({
         where: {
           id: {
             in: employeeIds,
@@ -87,6 +89,7 @@ export const createLeaveAndHoliday = async (req, res) => {
         },
         select: {
           deviceId: true,
+          employeeId: true,
         },
       });
       // send notifications to the affected employees
@@ -99,6 +102,14 @@ export const createLeaveAndHoliday = async (req, res) => {
         );
       }
     }
+
+    sendWebhooks("leave_added", {
+      status,
+      startDate: new Date(startDate),
+      endDate: new Date(endDate),
+      reason,
+      employeeIds : deviceTokens.map((dt) => dt.employeeId),
+    });
 
     success(
       res,

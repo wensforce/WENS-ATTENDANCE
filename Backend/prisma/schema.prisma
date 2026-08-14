@@ -113,6 +113,14 @@ model Designation {
   updatedAt DateTime @updatedAt @default(now())
 }
 
+model Webhook {
+  id        Int      @id @default(autoincrement())
+  url       String
+  eventType String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 enum Status {
   LEAVE
   HOLIDAY

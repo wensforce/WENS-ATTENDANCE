@@ -252,10 +252,12 @@ export const extraTime = (
   } else {
     extraMinutes = workedMinutes - effectiveShiftTimeInMinutes;
   }
-  const hours = String(Math.floor(extraMinutes / 60)).padStart(2, "0");
-  const minutes = String(Math.abs(extraMinutes % 60)).padStart(2, "0");
+  const sign = extraMinutes < 0 ? "-" : "";
+  const absMinutes = Math.abs(extraMinutes);
+  const hours = String(Math.floor(absMinutes / 60)).padStart(2, "0");
+  const minutes = String(absMinutes % 60).padStart(2, "0");
 
-  return `${hours}:${minutes} hrs`;
+  return `${sign}${hours}:${minutes} hrs`;
 };
 
 export const getUserShiftTimeInMinutes = (shift) => {

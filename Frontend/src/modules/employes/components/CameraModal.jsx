@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from "react";
-import { X, Camera, RotateCcw, CheckCircle } from "lucide-react";
+import { X, Camera, RotateCcw, CheckCircle, SwitchCamera } from "lucide-react";
 
 const CameraModal = ({ isOpen, onClose, onCapture }) => {
   const videoRef = useRef(null);
@@ -8,27 +8,32 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
   const [capturedImage, setCapturedImage] = useState(null);
   const [error, setError] = useState(null);
   const [isCameraReady, setIsCameraReady] = useState(false);
+  const [facingMode, setFacingMode] = useState("user");
 
   // Start camera when modal opens
   useEffect(() => {
     if (isOpen) {
-      startCamera();
+      startCamera(facingMode);
     }
     return () => {
       stopCamera();
     };
   }, [isOpen]);
 
-  const startCamera = async () => {
+  const startCamera = async (mode = facingMode) => {
     try {
       setError(null);
       setCapturedImage(null);
       setIsCameraReady(false);
 
-      // Request camera with front camera preference (selfie mode)
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+        setStream(null);
+      }
+
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode: "user", // 'user' is front camera, 'environment' is back camera
+          facingMode: mode,
           width: { ideal: 1280 },
           height: { ideal: 720 },
         },
@@ -46,6 +51,12 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
     }
   };
 
+  const switchCamera = () => {
+    const newMode = facingMode === "user" ? "environment" : "user";
+    setFacingMode(newMode);
+    startCamera(newMode);
+  };
+
   const stopCamera = () => {
     if (stream) {
       stream.getTracks().forEach((track) => track.stop());
@@ -58,26 +69,29 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
       const video = videoRef.current;
       const canvas = canvasRef.current;
 
-      // Set canvas dimensions to match video
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
 
-      // Draw video frame to canvas
       const context = canvas.getContext("2d");
+
+      // flip canvas horizontally to undo the CSS mirror for front camera
+      if (facingMode === "user") {
+        context.translate(canvas.width, 0);
+        context.scale(-1, 1);
+      }
+
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      // Get image as data URL
       const imageDataUrl = canvas.toDataURL("image/jpeg", 0.9);
       setCapturedImage(imageDataUrl);
 
-      // Stop camera after capture
       stopCamera();
     }
   };
 
   const handleRetake = () => {
     setCapturedImage(null);
-    startCamera();
+    startCamera(facingMode);
   };
 
   const handleConfirm = () => {
@@ -137,6 +151,7 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
               playsInline
               muted
               onCanPlay={() => setIsCameraReady(true)}
+              style={facingMode === "user" ? { transform: "scaleX(-1)" } : {}}
               className="w-full h-full object-cover"
             />
           )}
@@ -149,6 +164,16 @@ const CameraModal = ({ isOpen, onClose, onCapture }) => {
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div className="border-2 border-white/30 rounded-full w-48 h-48" />
             </div>
+          )}
+
+          {/* Switch camera button */}
+          {!capturedImage && !error && (
+            <button
+              onClick={switchCamera}
+              className="absolute top-3 right-3 p-2 rounded-full bg-black/40 hover:bg-black/60 transition-colors"
+            >
+              <SwitchCamera className="w-5 h-5 text-white" />
+            </button>
           )}
         </div>
 
