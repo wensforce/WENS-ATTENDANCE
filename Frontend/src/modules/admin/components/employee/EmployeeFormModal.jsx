@@ -342,12 +342,6 @@ const EmployeeFormModal = ({
     if (!form.userType) errs.userType = "User type is required";
     if (!shiftTime.startTime || !shiftTime.endTime)
       errs.shift = "Shift timing is required";
-    if (
-      !form.workLocation.address ||
-      !form.workLocation.lat ||
-      !form.workLocation.lng
-    )
-      errs.workLocationAddress = "Work location is required";
     return errs;
   };
 
