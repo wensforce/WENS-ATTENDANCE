@@ -57,7 +57,9 @@ app.use("/api/v1/notifications", notificationRoutes);
 app.use("/api/v1/webhook", webhookRoutes);
 
 
-app.use(express.static(path.join(__dirname, "../../Frontend/dist")));
+app.use(express.static(path.join(__dirname, "../../Frontend/dist"), {
+  dotfiles: "allow"
+}));
 
 app.get('*path', (req, res) => {
   res.sendFile(path.join(__dirname, '../../Frontend/dist/index.html'));
