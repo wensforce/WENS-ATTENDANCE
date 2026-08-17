@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "com.wensops.attendance.twa",
+        "sha256_cert_fingerprints": ["69:73:AC:4A:07:60:7D:2B:EF:B6:6E:DA:1E:C1:07:E5:F3:AC:34:D4:AB:95:09:71:6B:FD:46:1F:89:D9:00:10"]
+      }
+    }]
