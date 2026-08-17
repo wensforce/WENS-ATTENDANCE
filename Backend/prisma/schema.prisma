@@ -37,6 +37,7 @@ model User {
   designation     Designation? @relation(fields: [designationId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt @default(now())
+  @@map("user")
 }
 
 model Attendance {
@@ -55,6 +56,7 @@ model Attendance {
   checkoutOutside Boolean? @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  @@map("attendance")
 }
 
 model SpecialAttendance {
@@ -71,6 +73,7 @@ model SpecialAttendance {
   workHours String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  @@map("special_attendance")
 }
 
 model LeaveAndHoliday {
@@ -83,6 +86,7 @@ model LeaveAndHoliday {
   updatedAt  DateTime @updatedAt
 
   employees LeaveEmployee[]
+  @@map("leave_and_holiday")
 }
 
 model LeaveEmployee {
@@ -95,6 +99,7 @@ model LeaveEmployee {
 
   @@index([leaveId])
   @@index([employeeId])
+  @@map("leave_employee")
 }
 
 model Department {
@@ -103,6 +108,7 @@ model Department {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt @default(now())
   users User[]
+  @@map("department")
 }
 
 model Designation {
@@ -111,6 +117,7 @@ model Designation {
   users User[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt @default(now())
+  @@map("designation")
 }
 
 model Webhook {
@@ -119,6 +126,7 @@ model Webhook {
   eventType String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  @@map("webhook")
 }
 
 enum Status {

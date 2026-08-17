@@ -1,5 +1,0 @@
--- AlterTable
-ALTER TABLE `attendance` ADD COLUMN `extraTime` VARCHAR(191) NULL;
-
--- AlterTable
-ALTER TABLE `user` ADD COLUMN `workLocation` JSON NULL;
