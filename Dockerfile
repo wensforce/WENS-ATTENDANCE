@@ -55,5 +55,5 @@ COPY --from=frontend-build /app/Frontend/dist ./Frontend/dist
 WORKDIR /app/Backend
 EXPOSE 3000
 
-# Run migrations then start server
-CMD node index.js
+
+CMD ["sh", "-c", "npx prisma migrate deploy && node index.js"]
