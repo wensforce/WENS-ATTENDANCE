@@ -201,8 +201,16 @@ export const getAttendanceStatus = (shift) => {
 
   // Get current time
   const now = new Date();
-  const currentHour = now.getHours();
-  const currentMinutes = now.getMinutes();
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Kolkata",
+    hour: "numeric",
+    minute: "numeric",
+    hour12: false,
+  });
+
+  const parts = formatter.formatToParts(now);
+  const currentHour = parseInt(parts.find((p) => p.type === "hour").value);
+  const currentMinutes = parseInt(parts.find((p) => p.type === "minute").value);
 
   // Calculate shift start time in minutes
   const shiftStartInMinutes = shiftStart.hours * 60 + shiftStart.minutes;
@@ -227,7 +235,7 @@ export const extraTime = (
   isHoliday,
   weekOff,
   isHalfDay,
-  day
+  day,
 ) => {
   const checkInDate = new Date(checkInTime);
   const checkOutDate = new Date(checkOutTime);
@@ -244,10 +252,9 @@ export const extraTime = (
 
   // Convert to total minutes
   const workedMinutes = Math.floor(diffTime / (1000 * 60));
-  
-  
+
   let extraMinutes = 0;
-  if (isHoliday || isTodayWeekOff(weekOff,day)) {
+  if (isHoliday || isTodayWeekOff(weekOff, day)) {
     extraMinutes = workedMinutes;
   } else {
     extraMinutes = workedMinutes - effectiveShiftTimeInMinutes;
