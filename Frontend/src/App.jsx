@@ -20,6 +20,8 @@ const AttendanceDetails = lazy(
 const Report = lazy(() => import("./modules/admin/pages/Report"));
 const UserReport = lazy(() => import("./modules/admin/pages/UserReport"));
 const Setting = lazy(() => import("./modules/admin/pages/Setting"));
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
+const DataDeletionRequest = lazy(() => import("./pages/DataDeletionRequest"));
 
 import UserProtectedRoute from "./routes/UserProtectedRoute";
 import AdminProtectedRoute from "./routes/AdminProtectedRoute";
@@ -64,6 +66,13 @@ const App = () => {
       />
       <Suspense fallback={<LoadingFallback />}>
         <Routes>
+          {/* Public Routes (available to all users) */}
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+          <Route
+            path="/data-deletion-request"
+            element={<DataDeletionRequest />}
+          />
+
           {/* Public Routes (guest-only) */}
           <Route element={<UnprotectedRoute />}>
             <Route path="/login" element={<Login />} />
