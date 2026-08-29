@@ -120,7 +120,6 @@ const Dashboard = () => {
       setPieData(data.pieData);
       setBarData(data.barData);
       setDeptData(data.deptRows);
-      console.log("Dashboard Data:", data);
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
     }

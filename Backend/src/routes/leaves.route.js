@@ -13,4 +13,5 @@ router.get("/dates", authMiddleware, LeavesValidator.getLeavesAndHolidaysByDateV
 router.post("/", authMiddleware, adminMiddleware, LeavesValidator.createLeaveAndHolidayValidationRules(), LeavesController.createLeaveAndHoliday);
 router.put("/:id", authMiddleware, adminMiddleware, LeavesValidator.updateLeaveAndHolidayValidationRules(), LeavesController.updateLeaveAndHoliday);
 router.delete("/:id", authMiddleware, adminMiddleware, LeavesValidator.deleteLeaveAndHolidayValidationRules(), LeavesController.deleteLeaveAndHoliday);
+router.get("/user/:userId", authMiddleware, adminMiddleware, LeavesController.getUserAllLeaves);
 export default router;

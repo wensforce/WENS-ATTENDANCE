@@ -61,23 +61,40 @@ export const formatISO = (date) => {
 };
 
 /**
+ * Parse a value into a Date. A plain YYYY-MM-DD string is interpreted in the
+ * server's local timezone instead of UTC, so day boundaries line up with the
+ * calendar day the client picked.
+ * @param {Date|string} value
+ * @returns {Date}
+ */
+export const parseLocalDate = (value) => {
+  if (typeof value === "string") {
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (match) {
+      return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+    }
+  }
+  return new Date(value);
+};
+
+/**
  * Get start of day (00:00:00) for a given date
- * @param {Date} date - Date object (defaults to today)
+ * @param {Date|string} date - Date object or YYYY-MM-DD string (defaults to today)
  * @returns {Date} Start of day
  */
 export const getStartOfDay = (date = new Date()) => {
-  const newDate = new Date(date);
+  const newDate = parseLocalDate(date);
   newDate.setHours(0, 0, 0, 0);
   return newDate;
 };
 
 /**
  * Get end of day (23:59:59.999) for a given date
- * @param {Date} date - Date object (defaults to today)
+ * @param {Date|string} date - Date object or YYYY-MM-DD string (defaults to today)
  * @returns {Date} End of day
  */
 export const getEndOfDay = (date = new Date()) => {
-  const newDate = new Date(date);
+  const newDate = parseLocalDate(date);
   newDate.setHours(23, 59, 59, 999);
   return newDate;
 };
@@ -193,9 +210,9 @@ export const isTodayWeekOff = (weekOff, day) => {
   return weekOff ? weekOff.includes(today) : false;
 };
 
-export const getAttendanceStatus = (shift) => {
+export const getAttendanceStatus = (shift, lateBufferMinutes = 15) => {
   // shift is in format "9:00 AM - 5:00 PM", we need to extract start time and compare with current time
-  const [startShift, endShift] = shift.split(" - ");
+  const [startShift, endShift] = shift?.split(" - ") || [];
 
   const shiftStart = parseShiftTime(startShift);
 
@@ -216,7 +233,7 @@ export const getAttendanceStatus = (shift) => {
   const shiftStartInMinutes = shiftStart.hours * 60 + shiftStart.minutes;
 
   // Add 15-minute grace period
-  const graceDeadlineInMinutes = shiftStartInMinutes + 15;
+  const graceDeadlineInMinutes = shiftStartInMinutes + lateBufferMinutes;
 
   // Calculate current time in minutes
   const currentTimeInMinutes = currentHour * 60 + currentMinutes;

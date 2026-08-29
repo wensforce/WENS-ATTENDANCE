@@ -42,7 +42,6 @@ const App = () => {
   useEffect(() => {
     // Handle foreground (app open) notifications
     const unsubscribe = onForegroundMessage((payload) => {
-      console.log("Foreground notification:", payload);
       toast(`🔔 ${payload.notification.title}: ${payload.notification.body}`);
     });
 

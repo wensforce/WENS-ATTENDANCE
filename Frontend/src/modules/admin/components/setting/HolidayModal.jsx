@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { X, Loader2, ChevronDown, Check } from "lucide-react";
 import { employeesApi } from "../../api/employeesApi.js";
+import { useLeaveSubtypeApi } from "../../api/leaveSubtypeApi.js";
 
 const HolidayModal = ({
   open,
@@ -11,12 +12,15 @@ const HolidayModal = ({
 }) => {
   const [formData, setFormData] = useState({
     status: "HOLIDAY",
+    subTypeId: "",
     startDate: "",
     endDate: "",
     reason: "",
     employeeIds: [],
   });
   const [errors, setErrors] = useState({});
+  const [subTypes, setSubTypes] = useState([]);
+  const [subTypesLoading, setSubTypesLoading] = useState(false);
   const [employees, setEmployees] = useState([]);
   const [employeesLoading, setEmployeesLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -50,6 +54,24 @@ const HolidayModal = ({
     }
   };
 
+  // Fetch sub types for the currently selected status (LEAVE / HOLIDAY)
+  const fetchSubTypes = async (type) => {
+    setSubTypesLoading(true);
+    try {
+      const { data } = await useLeaveSubtypeApi.fetchLeaveSubtypes(type);
+      const list = data?.leaveSubTypes || data;
+      setSubTypes(Array.isArray(list) ? list : []);
+    } catch {
+      setSubTypes([]);
+    } finally {
+      setSubTypesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (open) fetchSubTypes(formData.status);
+  }, [open, formData.status]);
+
   useEffect(() => {
     if (open) {
       fetchEmployees();
@@ -63,6 +85,8 @@ const HolidayModal = ({
 
         setFormData({
           status: initialData?.status || "HOLIDAY",
+          subTypeId:
+            initialData?.subTypeId ?? initialData?.subType?.id ?? "",
           startDate: initialData?.startDate
             ? initialData.startDate.split("T")[0]
             : "",
@@ -75,6 +99,7 @@ const HolidayModal = ({
       } else {
         setFormData({
           status: "HOLIDAY",
+          subTypeId: "",
           startDate: "",
           endDate: "",
           reason: "",
@@ -153,7 +178,10 @@ const HolidayModal = ({
 
   const handleSubmit = () => {
     if (!validate()) return;
-    onSubmit(formData);
+    onSubmit({
+      ...formData,
+      subTypeId: formData.subTypeId ? Number(formData.subTypeId) : null,
+    });
   };
 
   const filteredEmployees = employees.filter(
@@ -244,7 +272,11 @@ const HolidayModal = ({
             <select
               value={formData.status}
               onChange={(e) =>
-                setFormData((p) => ({ ...p, status: e.target.value }))
+                setFormData((p) => ({
+                  ...p,
+                  status: e.target.value,
+                  subTypeId: "",
+                }))
               }
               disabled={loading}
               className="w-full px-3.5 py-2.5 text-sm rounded-xl border bg-surface text-text-primary focus:outline-none transition-all border-border focus:border-text-primary focus:ring-2 focus:ring-black/8 disabled:opacity-50"
@@ -254,6 +286,39 @@ const HolidayModal = ({
             </select>
             {errors.status && (
               <p className="text-xs text-absent-text">{errors.status}</p>
+            )}
+          </div>
+
+          {/* Sub Type */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-text-primary tracking-wide">
+              {formData.status === "LEAVE" ? "Leave Type" : "Holiday Type"}
+            </label>
+            <select
+              value={formData.subTypeId}
+              onChange={(e) =>
+                setFormData((p) => ({ ...p, subTypeId: e.target.value }))
+              }
+              disabled={loading || subTypesLoading || subTypes.length === 0}
+              className="w-full px-3.5 py-2.5 text-sm rounded-xl border bg-surface text-text-primary focus:outline-none transition-all border-border focus:border-text-primary focus:ring-2 focus:ring-black/8 disabled:opacity-50"
+            >
+              <option value="">
+                {subTypesLoading
+                  ? "Loading types..."
+                  : subTypes.length === 0
+                    ? "No types configured"
+                    : "Select a type (optional)"}
+              </option>
+              {subTypes.map((st) => (
+                <option key={st.id} value={st.id}>
+                  {st.name}
+                </option>
+              ))}
+            </select>
+            {!subTypesLoading && subTypes.length === 0 && (
+              <p className="text-xs text-text-muted">
+                Add sub types from Settings → Leave Types first.
+              </p>
             )}
           </div>
 
@@ -323,16 +388,16 @@ const HolidayModal = ({
             </label>
 
             {/* Quick Actions */}
-            <div className="flex gap-2 mb-2">
-              <button
-                type="button"
-                onClick={selectAllEmployees}
-                disabled={loading || employeesLoading}
-                className="px-3 py-1.5 text-xs font-medium rounded-lg border border-border bg-surface text-text-secondary hover:bg-background transition-all disabled:opacity-50"
-              >
-                Select All
-              </button>
-              <div className="relative" data-type-dropdown>
+            <div className="mb-2" data-type-dropdown>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={selectAllEmployees}
+                  disabled={loading || employeesLoading}
+                  className="px-3 py-1.5 text-xs font-medium rounded-lg border border-border bg-surface text-text-secondary hover:bg-background transition-all disabled:opacity-50"
+                >
+                  Select All
+                </button>
                 <button
                   type="button"
                   onClick={() => setShowTypeDropdown(!showTypeDropdown)}
@@ -341,10 +406,11 @@ const HolidayModal = ({
                 >
                   By Type <ChevronDown size={12} />
                 </button>
+              </div>
 
-                {showTypeDropdown && (
-                  <div className="absolute top-full left-0 mt-1 bg-surface border border-border rounded-xl shadow-lg z-10 min-w-max">
-                    {departments.length > 0 && (
+              {showTypeDropdown && (
+                <div className="mt-1.5 w-full bg-surface border border-border rounded-xl shadow-sm max-h-44 overflow-y-auto">
+                  {departments.length > 0 && (
                       <>
                         <div className="px-3 py-2 border-b border-border text-xs font-semibold text-text-primary">
                           Departments
@@ -389,13 +455,12 @@ const HolidayModal = ({
                         No options available
                       </div>
                     )}
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
 
             {/* Search Input */}
-            <div className="relative" data-employee-search>
+            <div data-employee-search>
               <input
                 ref={searchInputRef}
                 type="text"
@@ -403,16 +468,13 @@ const HolidayModal = ({
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 onFocus={handleSearchFocus}
-                onBlur={() =>
-                  setTimeout(() => setShowEmployeeDropdown(false), 200)
-                }
                 disabled={loading || employeesLoading}
                 className="w-full px-3.5 py-2.5 text-sm rounded-xl border bg-surface text-text-primary placeholder:text-text-muted focus:outline-none transition-all border-border focus:border-text-primary focus:ring-2 focus:ring-black/8 disabled:opacity-50"
               />
 
               {/* Dropdown */}
               {showEmployeeDropdown && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-surface border border-border rounded-xl shadow-lg z-10 max-h-48 overflow-y-auto">
+                <div className="mt-1 w-full bg-surface border border-border rounded-xl shadow-sm max-h-48 overflow-y-auto">
                   {employeesLoading ? (
                     <div className="p-3 text-center text-xs text-text-muted">
                       Loading employees...

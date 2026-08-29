@@ -161,8 +161,6 @@ const EmployeeFormModal = ({
 
   useEffect(() => {
     if (editData) {
-      console.log(editData);
-      
       setForm({
         employeeName: editData.employeeName ?? "",
         email: editData.email ?? "",
@@ -486,8 +484,6 @@ const EmployeeFormModal = ({
                     
                     <option key={dept.id} value={dept.id}>
                       {dept.name}
-                      {console.log(dept)
-                      }
                     </option>
                   ))}
                   <option value="__CREATE_NEW__" className="font-semibold">

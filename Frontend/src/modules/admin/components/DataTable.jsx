@@ -230,6 +230,14 @@ const DataTable = ({
                               "transparent";
                           }
                         }}
+                        onClick={
+                          (e) => {
+                            e.stopPropagation();
+                            if (onView) {
+                              onView(row);
+                            }
+                          }
+                        }
                       >
                         {/* Row Checkbox */}
                         {selectable && (
@@ -262,7 +270,10 @@ const DataTable = ({
                             <div className="flex gap-2 justify-center items-center">
                               {onView && (
                                 <button
-                                  onClick={() => onView(row)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onView(row);
+                                  }}
                                   disabled={loading}
                                   className="px-3 py-1.5 rounded text-xs font-medium cursor-pointer border transition-all whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed bg-background text-text-primary border-border hover:border-text-primary"
                                 >
@@ -271,7 +282,10 @@ const DataTable = ({
                               )}
                               {onEdit && (
                                 <button
-                                  onClick={() => onEdit(row)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onEdit(row);
+                                  }}
                                   disabled={loading}
                                   className="px-3 py-1.5 rounded text-xs font-medium cursor-pointer border transition-all whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
                                   style={{
@@ -293,7 +307,10 @@ const DataTable = ({
                               )}
                               {onDelete && (
                                 <button
-                                  onClick={() => onDelete(row)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onDelete(row);
+                                  }}
                                   disabled={loading}
                                   className="px-3 py-1.5 rounded text-xs font-medium cursor-pointer border transition-all whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
                                   style={{

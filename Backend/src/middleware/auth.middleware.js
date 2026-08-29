@@ -4,8 +4,8 @@ import { responses } from "../utils/response.js";
 
 const authMiddleware = async (req, res, next) => {
   try {
-    const accessToken = req.cookies?.accessToken || req.headers.Authorization;
-    
+    const accessToken = req.cookies?.accessToken || req.headers.authorization?.split(" ")[1];
+
     if (!accessToken) {
       return responses.unauthorized(res, "Access token missing");
     }

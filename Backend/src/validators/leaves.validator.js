@@ -28,6 +28,7 @@ export const createLeaveAndHolidayValidationRules = () => {
         return true;
       }),
     body("reason").optional().isString().withMessage("Reason must be a string"),
+    body("subTypeId").optional().isInt().withMessage("Sub type ID must be an integer"),
     body("employeeIds")
       .isArray({ min: 1 })
       .withMessage("Employee IDs must be an array with at least one ID")
@@ -61,6 +62,7 @@ export const updateLeaveAndHolidayValidationRules = () => {
         return true;
       }),
     body("reason").optional().isString().withMessage("Reason must be a string"),
+    body("subTypeId").optional().isInt().withMessage("Sub type ID must be an integer"),
     body("employeeIds")
       .isArray({ min: 1 })
       .withMessage("Employee IDs must be an array with at least one ID")

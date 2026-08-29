@@ -2,15 +2,6 @@ import api from "../../../config/axios.js";
 
 export const authApi = {
   login: async (email, mobileNumber, password) => {
-    console.log(
-      "email",
-      email,
-      "mobileNumber",
-      mobileNumber,
-      "password",
-      password,
-    );
-
     try {
       let response;
       if (email) {

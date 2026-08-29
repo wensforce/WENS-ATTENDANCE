@@ -1,5 +1,12 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { X, Loader2, Search, MapPin, Navigation } from "lucide-react";
+import useDebounce from "../../../../shared/hooks/useDebounce.js";
+import {
+  loadGoogleMaps,
+  GOOGLE_MAPS_MAP_ID,
+} from "../../../../shared/utils/googleMaps.js";
+
+const INDIA_CENTER = { lat: 20.5937, lng: 78.9629 };
 
 const MapPickerModal = ({ open, onClose, onConfirm, loading = false }) => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -10,123 +17,203 @@ const MapPickerModal = ({ open, onClose, onConfirm, loading = false }) => {
   });
   const [isSearching, setIsSearching] = useState(false);
   const [locationLoading, setLocationLoading] = useState(false);
-  const [searchResults, setSearchResults] = useState([]);
+  const [suggestions, setSuggestions] = useState([]);
+  const [mapError, setMapError] = useState("");
+
   const mapContainer = useRef(null);
   const map = useRef(null);
   const marker = useRef(null);
+  const geocoder = useRef(null);
+  const placesLib = useRef(null);
+  const sessionToken = useRef(null);
+  // Suppresses the autocomplete lookup that a programmatic input update triggers.
+  const skipNextLookup = useRef(false);
 
-  // Initialize Leaflet map dynamically when modal opens
+  const debouncedQuery = useDebounce(searchQuery, 400);
+
+  const placeMarker = useCallback((lat, lng) => {
+    if (!map.current) return;
+    const position = { lat, lng };
+
+    if (marker.current) {
+      marker.current.position = position;
+    } else {
+      marker.current = new window.google.maps.marker.AdvancedMarkerElement({
+        map: map.current,
+        position,
+      });
+    }
+    map.current.panTo(position);
+  }, []);
+
+  const reverseGeocode = useCallback(async (lat, lng) => {
+    const fallback = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    if (!geocoder.current) return fallback;
+
+    try {
+      const { results } = await geocoder.current.geocode({
+        location: { lat, lng },
+      });
+      return results?.[0]?.formatted_address || fallback;
+    } catch (error) {
+      console.error("Reverse geocoding failed:", error);
+      return fallback;
+    }
+  }, []);
+
+  const selectCoordinates = useCallback(
+    async (lat, lng) => {
+      setSelectedLocation({
+        lat: lat.toFixed(6),
+        lng: lng.toFixed(6),
+        address: "",
+      });
+      placeMarker(lat, lng);
+      const address = await reverseGeocode(lat, lng);
+      setSelectedLocation((prev) => ({ ...prev, address }));
+    },
+    [placeMarker, reverseGeocode],
+  );
+
+  // Initialise the Google map when the modal opens
   useEffect(() => {
-    if (!open || !mapContainer.current) return;
+    if (!open) return;
+
+    let cancelled = false;
 
     const initMap = async () => {
-      // Dynamically import Leaflet and its CSS
-      const leafletModule = await import("leaflet");
-      const L = leafletModule.default;
-      await import("leaflet/dist/leaflet.css");
+      await loadGoogleMaps();
+      if (cancelled || !mapContainer.current) return;
 
-      // Create map
-      map.current = L.map(mapContainer.current).setView([20.5937, 78.9629], 5); // India center
+      const [{ Map }] = await Promise.all([
+        window.google.maps.importLibrary("maps"),
+        window.google.maps.importLibrary("marker"),
+      ]);
+      placesLib.current = await window.google.maps.importLibrary("places");
+      if (cancelled || !mapContainer.current) return;
 
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution:
-          '&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a>',
-        maxZoom: 19,
-      }).addTo(map.current);
+      map.current = new Map(mapContainer.current, {
+        center: INDIA_CENTER,
+        zoom: 5,
+        mapId: GOOGLE_MAPS_MAP_ID,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
+      });
+      geocoder.current = new window.google.maps.Geocoder();
 
-      // Handle map click
-      map.current.on("click", (e) => {
-        const { lat, lng } = e.latlng;
-        setSelectedLocation((prev) => ({
-          ...prev,
-          lat: lat.toFixed(6),
-          lng: lng.toFixed(6),
-        }));
-        updateMarker(lat, lng, L);
-        reverseGeocode(lat, lng);
+      map.current.addListener("click", (e) => {
+        selectCoordinates(e.latLng.lat(), e.latLng.lng());
       });
     };
 
-    initMap().catch((err) => console.error("Failed to load map:", err));
-
-    return () => {
-      if (map.current) {
-        map.current.remove();
-        map.current = null;
-        marker.current = null;
+    initMap().catch((err) => {
+      console.error("Failed to load map:", err);
+      if (!cancelled) {
+        setMapError(
+          `Unable to load Google Maps: ${err?.message || err}. Check the API key and enabled APIs.`,
+        );
       }
-    };
-  }, [open]);
-
-  const updateMarker = (lat, lng, L) => {
-    if (!map.current) return;
-
-    if (marker.current) {
-      map.current.removeLayer(marker.current);
-    }
-
-    marker.current = L.marker([lat, lng]).addTo(map.current);
-    map.current.panTo([lat, lng]); // Pan without changing zoom level
-  };
-
-  const reverseGeocode = async (lat, lng) => {
-    try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
-      );
-      const data = await response.json();
-      setSelectedLocation((prev) => ({
-        ...prev,
-        address: data.address?.country || `${lat}, ${lng}`,
-      }));
-    } catch (error) {
-      console.error("Reverse geocoding failed:", error);
-      setSelectedLocation((prev) => ({
-        ...prev,
-        address: `${lat}, ${lng}`,
-      }));
-    }
-  };
-
-  const handleSearch = async () => {
-    if (!searchQuery.trim() || !map.current) return;
-
-    setIsSearching(true);
-    try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-          searchQuery
-        )}`
-      );
-      const results = await response.json();
-      setSearchResults(results.slice(0, 5)); // Limit to 5 results
-    } catch (error) {
-      console.error("Search failed:", error);
-      setSearchResults([]);
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  const selectSearchResult = async (result) => {
-    const lat = parseFloat(result.lat).toFixed(6);
-    const lng = parseFloat(result.lon).toFixed(6);
-
-    setSelectedLocation({
-      lat,
-      lng,
-      address: result.display_name || result.name,
     });
 
-    // Update map
-    const leafletModule = await import("leaflet");
-    const L = leafletModule.default;
-    updateMarker(parseFloat(result.lat), parseFloat(result.lon), L);
-    setSearchResults([]);
+    return () => {
+      cancelled = true;
+      if (marker.current) marker.current.map = null;
+      marker.current = null;
+      map.current = null;
+      geocoder.current = null;
+      placesLib.current = null;
+      sessionToken.current = null;
+    };
+  }, [open, selectCoordinates]);
+
+  // Reset transient state each time the modal opens
+  useEffect(() => {
+    if (!open) return;
     setSearchQuery("");
+    setSuggestions([]);
+    setMapError("");
+    setSelectedLocation({ lat: "", lng: "", address: "" });
+  }, [open]);
+
+  // Autocomplete lookup as the user types
+  useEffect(() => {
+    if (skipNextLookup.current) {
+      skipNextLookup.current = false;
+      return;
+    }
+
+    const query = debouncedQuery.trim();
+    if (!open || query.length < 3 || !placesLib.current) {
+      setSuggestions([]);
+      return;
+    }
+
+    let cancelled = false;
+    const fetchSuggestions = async () => {
+      const { AutocompleteSessionToken, AutocompleteSuggestion } =
+        placesLib.current;
+
+      if (!sessionToken.current) {
+        sessionToken.current = new AutocompleteSessionToken();
+      }
+
+      setIsSearching(true);
+      try {
+        const { suggestions: results } =
+          await AutocompleteSuggestion.fetchAutocompleteSuggestions({
+            input: query,
+            sessionToken: sessionToken.current,
+            region: "in",
+          });
+        if (!cancelled) setSuggestions(results.slice(0, 5));
+      } catch (error) {
+        console.error("Autocomplete failed:", error);
+        if (!cancelled) setSuggestions([]);
+      } finally {
+        if (!cancelled) setIsSearching(false);
+      }
+    };
+
+    fetchSuggestions();
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedQuery, open]);
+
+  const selectSuggestion = async (suggestion) => {
+    const prediction = suggestion.placePrediction;
+    if (!prediction) return;
+
+    setSuggestions([]);
+    skipNextLookup.current = true;
+    setSearchQuery(prediction.text?.text || "");
+
+    try {
+      const place = prediction.toPlace();
+      await place.fetchFields({
+        fields: ["location", "formattedAddress", "displayName"],
+      });
+      // A session ends once a place is fetched from one of its predictions.
+      sessionToken.current = null;
+
+      const lat = place.location.lat();
+      const lng = place.location.lng();
+
+      setSelectedLocation({
+        lat: lat.toFixed(6),
+        lng: lng.toFixed(6),
+        address:
+          place.formattedAddress || place.displayName || prediction.text?.text,
+      });
+      placeMarker(lat, lng);
+      map.current?.setZoom(16);
+    } catch (error) {
+      console.error("Failed to fetch place details:", error);
+    }
   };
 
-  const getCurrentLocation = async () => {
+  const getCurrentLocation = () => {
     if (!navigator.geolocation) {
       alert("Geolocation not supported");
       return;
@@ -136,26 +223,15 @@ const MapPickerModal = ({ open, onClose, onConfirm, loading = false }) => {
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords;
-        const lat = latitude.toFixed(6);
-        const lng = longitude.toFixed(6);
-
-        setSelectedLocation({
-          lat,
-          lng,
-          address: "",
-        });
-
-        const leafletModule = await import("leaflet");
-        const L = leafletModule.default;
-        updateMarker(latitude, longitude, L);
-        await reverseGeocode(latitude, longitude);
+        await selectCoordinates(latitude, longitude);
+        map.current?.setZoom(16);
         setLocationLoading(false);
       },
       (error) => {
         console.error("Geolocation error:", error);
         alert("Failed to get current location");
         setLocationLoading(false);
-      }
+      },
     );
   };
 
@@ -177,7 +253,8 @@ const MapPickerModal = ({ open, onClose, onConfirm, loading = false }) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="relative w-full max-w-2xl max-h-[90vh] flex flex-col rounded-2xl shadow-2xl overflow-hidden bg-surface">
+      {/* scroll bar hide css in tailwind */}
+      <div className="relative w-full max-w-2xl max-h-[90vh] flex flex-col rounded-2xl shadow-2xl overflow-y-scroll scrollbar-none bg-surface [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {/* Header */}
         <div className="flex items-start justify-between px-6 pt-5 pb-4 shrink-0 border-b border-border">
           <div>
@@ -210,18 +287,15 @@ const MapPickerModal = ({ open, onClose, onConfirm, loading = false }) => {
                 placeholder="Search for a location..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyPress={(e) => e.key === "Enter" && handleSearch()}
-                className="w-full pl-9 pr-3.5 py-2.5 text-sm rounded-xl border border-border bg-surface text-text-primary placeholder:text-text-muted focus:outline-none focus:border-text-primary focus:ring-2 focus:ring-black/8"
+                className="w-full pl-9 pr-9 py-2.5 text-sm rounded-xl border border-border bg-surface text-text-primary placeholder:text-text-muted focus:outline-none focus:border-text-primary focus:ring-2 focus:ring-black/8"
               />
+              {isSearching && (
+                <Loader2
+                  size={14}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted animate-spin"
+                />
+              )}
             </div>
-            <button
-              onClick={handleSearch}
-              disabled={isSearching || !searchQuery.trim()}
-              className="px-4 py-2.5 text-xs font-semibold rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-all disabled:opacity-50 cursor-pointer flex items-center gap-2"
-            >
-              {isSearching && <Loader2 size={13} className="animate-spin" />}
-              Search
-            </button>
             <button
               onClick={getCurrentLocation}
               disabled={locationLoading}
@@ -237,37 +311,46 @@ const MapPickerModal = ({ open, onClose, onConfirm, loading = false }) => {
             </button>
           </div>
 
-          {/* Search Results */}
-          {searchResults.length > 0 && (
+          {/* Autocomplete Suggestions */}
+          {suggestions.length > 0 && (
             <div className="bg-background rounded-lg border border-border overflow-hidden">
-              {searchResults.map((result, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => selectSearchResult(result)}
-                  className="w-full text-left px-4 py-2.5 text-xs hover:bg-surface transition-colors border-b border-border last:border-b-0"
-                >
-                  <div className="flex items-start gap-2">
-                    <MapPin size={12} className="text-text-muted mt-0.5 shrink-0" />
-                    <div className="min-w-0">
-                      <p className="font-medium text-text-primary truncate">
-                        {result.name}
-                      </p>
-                      <p className="text-xs text-text-muted truncate">
-                        {result.display_name}
-                      </p>
+              {suggestions.map((suggestion, idx) => {
+                const prediction = suggestion.placePrediction;
+                return (
+                  <button
+                    key={prediction?.placeId || idx}
+                    onClick={() => selectSuggestion(suggestion)}
+                    className="w-full text-left px-4 py-2.5 text-xs hover:bg-surface transition-colors border-b border-border last:border-b-0"
+                  >
+                    <div className="flex items-start gap-2">
+                      <MapPin
+                        size={12}
+                        className="text-text-muted mt-0.5 shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <p className="font-medium text-text-primary truncate">
+                          {prediction?.mainText?.text || prediction?.text?.text}
+                        </p>
+                        <p className="text-xs text-text-muted truncate">
+                          {prediction?.secondaryText?.text ||
+                            prediction?.text?.text}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </div>
           )}
+
+          {mapError && <p className="text-xs text-absent-text">{mapError}</p>}
         </div>
 
         {/* Map Container */}
         <div
           ref={mapContainer}
           className="flex-1 bg-background rounded-none"
-          style={{ minHeight: "400px" }}
+          style={{ minHeight: "350px" }}
         />
 
         {/* Selected Location Info */}
@@ -289,7 +372,7 @@ const MapPickerModal = ({ open, onClose, onConfirm, loading = false }) => {
         )}
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 shrink-0 border-t border-border bg-background">
+        <div className="flex items-center rounded-2xl justify-end gap-3 px-6 py-4 shrink-0 border-t border-border bg-background">
           <button
             onClick={onClose}
             disabled={loading}

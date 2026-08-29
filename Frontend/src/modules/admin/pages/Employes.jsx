@@ -134,8 +134,7 @@ const Employes = () => {
   const fetchEmployees = async (page = 1) => {
     setLoading(true);
     try {
-      const { data } = await employeesApi.fetchAllEmployees(page);
-      
+      const { data } = await employeesApi.fetchAllEmployees({ page });
       setEmployees(data.employees);
       setFiltered(data.employees);
       setPagination(data.pagination);
@@ -259,10 +258,6 @@ const Employes = () => {
     }
   };
 
-  // Stats
-  
-  const totalCount = employees.length;
-
   return (
     <main className="flex-1 min-w-0">
       {/* ── Top Bar ── */}
@@ -298,7 +293,7 @@ const Employes = () => {
                 Total Employees
               </p>
               <p className="text-2xl font-bold text-text-primary">
-                {totalCount}
+                {pagination?.totalCount || 0}
               </p>
             </div>
           </div>
@@ -341,7 +336,7 @@ const Employes = () => {
                 Employee Directory
               </h2>
               <p className="text-xs text-text-secondary mt-0.5">
-                {filtered.length} of {totalCount} employees
+                {filtered.length} of {pagination?.totalCount || 0} employees
               </p>
             </div>
 

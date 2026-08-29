@@ -28,6 +28,13 @@ export const getLeavesAndHolidays = async (req, res) => {
           },
         ],
       },
+      include: {
+        subType: {
+          select: {
+            name: true,
+          },
+        },
+      },
     });
     success(res, 200, "Leaves and holidays fetched successfully", leaves);
   } catch (error) {
@@ -48,6 +55,13 @@ export const getLeaveAndHolidayById = async (req, res) => {
           },
         },
       },
+      include: {
+        subType: {
+          select: {
+            name: true,
+          },
+        },
+      },
     });
     if (!leaveAndHoliday) {
       return responses.notFound(res, "Leave or holiday not found");
@@ -61,13 +75,15 @@ export const getLeaveAndHolidayById = async (req, res) => {
 
 export const createLeaveAndHoliday = async (req, res) => {
   try {
-    const { status, startDate, endDate, reason, employeeIds } = req.body;
+    const { status, startDate, endDate, reason, employeeIds, subTypeId } =
+      req.body;
     const newLeaveAndHoliday = await prisma.leaveAndHoliday.create({
       data: {
         status,
         startDate: new Date(startDate),
         endDate: new Date(endDate),
         reason,
+        subTypeId,
         employees: {
           create: employeeIds.map((id) => ({
             employeeId: id,
@@ -108,7 +124,7 @@ export const createLeaveAndHoliday = async (req, res) => {
       startDate: new Date(startDate),
       endDate: new Date(endDate),
       reason,
-      employeeIds : deviceTokens.map((dt) => dt.employeeId),
+      employeeIds: deviceTokens.map((dt) => dt.employeeId),
     });
 
     success(
@@ -126,14 +142,16 @@ export const createLeaveAndHoliday = async (req, res) => {
 export const updateLeaveAndHoliday = async (req, res) => {
   try {
     const { id } = req.params;
-    const { type, startDate, endDate, reason, employeeIds } = req.body;
+    const { status, startDate, endDate, reason, employeeIds, subTypeId } =
+      req.body;
     const updatedLeaveAndHoliday = await prisma.leaveAndHoliday.update({
       where: { id: parseInt(id) },
       data: {
-        type,
+        status,
         startDate: new Date(startDate),
         endDate: new Date(endDate),
         reason,
+        subTypeId,
         employees: {
           deleteMany: {},
           create: employeeIds.map((id) => ({
@@ -198,6 +216,13 @@ export const getLeavesAndHolidaysByDate = async (req, res) => {
             gte: new Date(date),
           },
         },
+        include: {
+          subType: {
+            select: {
+              name: true,
+            },
+          },
+        },
       });
     } else if (month && year) {
       leavesAndHolidays = await prisma.leaveAndHoliday.findMany({
@@ -210,6 +235,13 @@ export const getLeavesAndHolidaysByDate = async (req, res) => {
           startDate: {
             gte: new Date(`${year}-${month}-01`),
             lt: new Date(`${year}-${parseInt(month) + 1}-01`),
+          },
+        },
+        include: {
+          subType: {
+            select: {
+              name: true,
+            },
           },
         },
       });
@@ -226,6 +258,13 @@ export const getLeavesAndHolidaysByDate = async (req, res) => {
             lt: new Date(`${parseInt(year) + 1}-01-01`),
           },
         },
+        include: {
+          subType: {
+            select: {
+              name: true,
+            },
+          },
+        },
       });
     } else if (startDate && endDate) {
       leavesAndHolidays = await prisma.leaveAndHoliday.findMany({
@@ -233,6 +272,13 @@ export const getLeavesAndHolidaysByDate = async (req, res) => {
           employees: {
             some: {
               employeeId: req.user.userId,
+            },
+          },
+        },
+        include: {
+          subType: {
+            select: {
+              name: true,
             },
           },
         },
@@ -271,6 +317,11 @@ export const getAllLeavesAndHolidays = async (req, res) => {
           },
         },
         include: {
+          subType: {
+            select: {
+              name: true,
+            },
+          },
           employees: {
             select: {
               employee: {
@@ -293,6 +344,11 @@ export const getAllLeavesAndHolidays = async (req, res) => {
           },
         },
         include: {
+          subType: {
+            select: {
+              name: true,
+            },
+          },
           employees: {
             select: {
               employee: {
@@ -315,6 +371,11 @@ export const getAllLeavesAndHolidays = async (req, res) => {
           },
         },
         include: {
+          subType: {
+            select: {
+              name: true,
+            },
+          },
           employees: {
             select: {
               employee: {
@@ -339,6 +400,11 @@ export const getAllLeavesAndHolidays = async (req, res) => {
           },
         },
         include: {
+          subType: {
+            select: {
+              name: true,
+            },
+          },
           employees: {
             select: {
               employee: {
@@ -367,6 +433,48 @@ export const getAllLeavesAndHolidays = async (req, res) => {
     );
   } catch (error) {
     console.error("Error fetching all leaves and holidays:", error);
+    responses.serverError(res, "Internal server error");
+  }
+};
+
+export const getUserAllLeaves = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { month, year } = req.query;
+    if (!userId) {
+      return responses.badRequest(res, "User ID is required");
+    }
+    if (!month || !year) {
+      return responses.badRequest(res, "Month and year are required");
+    }
+    const monthNum = parseInt(month);
+    const yearNum = parseInt(year);
+    const rangeStart = new Date(yearNum, monthNum - 1, 1);
+    const rangeEnd = new Date(yearNum, monthNum, 1);
+
+    // Include any leave overlapping the month, not only those starting in it
+    const leaves = await prisma.leaveAndHoliday.findMany({
+      where: {
+        employees: {
+          some: {
+            employeeId: parseInt(userId),
+          },
+        },
+        startDate: { lt: rangeEnd },
+        endDate: { gte: rangeStart },
+      },
+      include: {
+        subType: {
+          select: {
+            name: true,
+          },
+        },
+      },
+      orderBy: { startDate: "asc" },
+    });
+    success(res, 200, "Leaves fetched successfully", leaves);
+  } catch (error) {
+    console.error("Error fetching user all leaves:", error);
     responses.serverError(res, "Internal server error");
   }
 };

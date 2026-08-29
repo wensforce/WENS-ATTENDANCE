@@ -66,5 +66,17 @@ export const employeesApi = {
   resetEmployeePin: async ({email, phoneNumber}) => {
     const response = await api.post(`/admin/employee/reset-pin`, { email, phoneNumber });
     return response.data;
-  }
+  },
+
+  /**
+   * Enable/disable the work-location check for an employee
+   * @param {string|number} id - Employee ID
+   * @param {boolean} skipLocationCheck
+   */
+  toggleSkipLocationCheck: async (id, skipLocationCheck) => {
+    const response = await api.patch(`/admin/employee/${id}/skip-location-check`, {
+      skipLocationCheck,
+    });
+    return response.data;
+  },
 };

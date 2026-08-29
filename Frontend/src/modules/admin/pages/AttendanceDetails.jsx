@@ -83,11 +83,11 @@ const PhotoPanel = ({ label, src }) => (
         <img
           src={src}
           alt={label}
-          className="w-full h-48 object-cover rounded-xl border border-border hover:opacity-90 transition-opacity cursor-pointer"
+          className="w-full aspect-square object-cover rounded-xl border border-border hover:opacity-90 transition-opacity cursor-pointer"
         />
       </a>
     ) : (
-      <div className="w-full h-48 rounded-xl border border-border bg-background flex flex-col items-center justify-center gap-2 text-text-muted">
+      <div className="w-full aspect-square rounded-xl border border-border bg-background flex flex-col items-center justify-center gap-2 text-text-muted">
         <Image size={28} />
         <p className="text-xs">No photo</p>
       </div>

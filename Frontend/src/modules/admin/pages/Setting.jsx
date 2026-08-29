@@ -4,21 +4,31 @@ import {
   Building2,
   Briefcase,
   Calendar,
+  CalendarDays,
   ChevronRight,
   DollarSign,
+  Clock,
 } from "lucide-react";
 import useAuth from "../../login/hooks/useAuth.js";
 import { useDepartmentApi } from "../api/departmentApi.js";
 import { useDesignationApi } from "../api/designationApi.js";
 import { useHolidayApi } from "../api/holidayApi.js";
+import { useLeaveSubtypeApi } from "../api/leaveSubtypeApi.js";
 import { employeesApi } from "../api/employeesApi.js";
 import DepartmentCreateModal from "../components/DepartmentCreateModal.jsx";
 import DesignationCreateModal from "../components/DesignationCreateModal.jsx";
+import LeaveTypeCreateModal from "../components/LeaveTypeCreateModal.jsx";
 import WebhookCreateModal from "../components/WebhookCreateModal.jsx";
 import { useWebhookApi } from "../api/webhookApi.js";
 import DataTable from "../components/DataTable.jsx";
 import ConfirmModal from "../../../shared/components/ConfirmModal.jsx";
-import { StatCard, SectionHeader, HolidayModal, QuickListCard } from "../components/setting/index.js";
+import {
+  StatCard,
+  SectionHeader,
+  HolidayModal,
+  QuickListCard,
+  AttendanceSettingSection,
+} from "../components/setting/index.js";
 import PaySlip from "../components/setting/PaySlip.jsx";
 import { toast } from "react-toastify";
 
@@ -29,6 +39,8 @@ const TABS = [
   { id: "departments", label: "Departments", icon: Building2 },
   { id: "designations", label: "Designations", icon: Briefcase },
   { id: "holidays", label: "Holidays", icon: Calendar },
+  { id: "leaveTypes", label: "Leave Types", icon: CalendarDays },
+  { id: "attendance", label: "Attendance", icon: Clock },
   { id: "payslip", label: "Pay Slip", icon: DollarSign },
   { id: "webhook", label: "Webhook", icon: LayoutGrid },
 ];
@@ -67,6 +79,16 @@ const Setting = () => {
   const [holidayDeleteLoading, setHolidayDeleteLoading] = useState(false);
   const [holidayMonth, setHolidayMonth] = useState(new Date().getMonth() + 1);
   const [holidayYear, setHolidayYear] = useState(new Date().getFullYear());
+
+  // ── Leave Types ──
+  const [leaveTypes, setLeaveTypes] = useState([]);
+  const [leaveTypeLoading, setLeaveTypeLoading] = useState(true);
+  const [leaveTypeModalOpen, setLeaveTypeModalOpen] = useState(false);
+  const [leaveTypeSubmitting, setLeaveTypeSubmitting] = useState(false);
+  const [editingLeaveType, setEditingLeaveType] = useState(null);
+  const [deletingLeaveType, setDeletingLeaveType] = useState(null);
+  const [leaveTypeDeleteLoading, setLeaveTypeDeleteLoading] = useState(false);
+  const [leaveTypeFilter, setLeaveTypeFilter] = useState("ALL");
 
   // ── Webhooks ──
   const [webhooks, setWebhooks] = useState([]);
@@ -125,6 +147,21 @@ const Setting = () => {
     }
   };
 
+  const fetchLeaveTypes = async (filter = leaveTypeFilter) => {
+    setLeaveTypeLoading(true);
+    try {
+      const { data } = await useLeaveSubtypeApi.fetchLeaveSubtypes(
+        filter === "ALL" ? undefined : filter,
+      );
+      const list = data?.leaveSubTypes || data;
+      setLeaveTypes(Array.isArray(list) ? list : []);
+    } catch {
+      toast.error("Failed to load sub types");
+    } finally {
+      setLeaveTypeLoading(false);
+    }
+  };
+
   const fetchWebhooks = async () => {
     setWebhookLoading(true);
     try {
@@ -158,6 +195,10 @@ const Setting = () => {
   useEffect(() => {
     fetchHolidays(holidayMonth, holidayYear);
   }, [holidayMonth, holidayYear]);
+
+  useEffect(() => {
+    fetchLeaveTypes(leaveTypeFilter);
+  }, [leaveTypeFilter]);
 
   // ── Department CRUD ──
 
@@ -228,6 +269,45 @@ const Setting = () => {
       toast.error("Failed to delete designation");
     } finally {
       setDesigDeleteLoading(false);
+    }
+  };
+
+  // ── Leave Type CRUD ──
+
+  const handleLeaveTypeSubmit = async ({ name, type }) => {
+    setLeaveTypeSubmitting(true);
+    try {
+      if (editingLeaveType) {
+        await useLeaveSubtypeApi.updateLeaveSubtype(editingLeaveType.id, { name, type });
+        toast.success("Sub type updated");
+      } else {
+        await useLeaveSubtypeApi.createLeaveSubtype({ name, type });
+        toast.success("Sub type created");
+      }
+      setLeaveTypeModalOpen(false);
+      setEditingLeaveType(null);
+      fetchLeaveTypes();
+    } catch (err) {
+      toast.error(
+        err?.response?.data?.message ||
+          (editingLeaveType ? "Failed to update sub type" : "Failed to create sub type"),
+      );
+    } finally {
+      setLeaveTypeSubmitting(false);
+    }
+  };
+
+  const handleLeaveTypeDelete = async () => {
+    setLeaveTypeDeleteLoading(true);
+    try {
+      await useLeaveSubtypeApi.deleteLeaveSubtype(deletingLeaveType.id);
+      toast.success("Sub type deleted");
+      setDeletingLeaveType(null);
+      fetchLeaveTypes();
+    } catch {
+      toast.error("Failed to delete sub type");
+    } finally {
+      setLeaveTypeDeleteLoading(false);
     }
   };
 
@@ -353,6 +433,45 @@ const Setting = () => {
     },
   ];
 
+  const leaveTypeColumns = [
+    {
+      header: "Sub Type",
+      key: "name",
+      render: (row) => (
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-background flex items-center justify-center shrink-0">
+            <CalendarDays size={14} className="text-text-muted" />
+          </div>
+          <span className="text-sm font-medium text-text-primary">{row.name}</span>
+        </div>
+      ),
+    },
+    {
+      header: "Used For",
+      key: "type",
+      render: (row) => (
+        <span
+          className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+            row.type === "HOLIDAY"
+              ? "bg-holiday-bg text-holiday-text"
+              : "bg-background text-text-secondary border border-border"
+          }`}
+        >
+          {row.type === "HOLIDAY" ? "Holiday" : "Leave"}
+        </span>
+      ),
+    },
+    {
+      header: "Created",
+      key: "createdAt",
+      render: (row) => (
+        <span className="text-sm text-text-muted">
+          {row.createdAt ? new Date(row.createdAt).toLocaleDateString() : "—"}
+        </span>
+      ),
+    },
+  ];
+
   const webhookColumns = [
     {
       header: "Endpoint URL",
@@ -392,7 +511,9 @@ const Setting = () => {
           </div>
           <div>
             <span className="text-sm font-medium text-text-primary">{row.reason}</span>
-            <p className="text-xs text-text-muted">{row.status === "LEAVE" ? "Leave" : "Holiday"}</p>
+            <p className="text-xs text-text-muted">
+              {row.subType?.name || (row.status === "LEAVE" ? "Leave" : "Holiday")}
+            </p>
           </div>
         </div>
       ),
@@ -425,6 +546,13 @@ const Setting = () => {
         >
           {row.status === "LEAVE" ? "Leave" : "Holiday"}
         </span>
+      ),
+    },
+    {
+      header: "Sub Type",
+      key: "subType",
+      render: (row) => (
+        <span className="text-sm text-text-secondary">{row.subType?.name}</span>
       ),
     },
   ];
@@ -473,7 +601,7 @@ const Setting = () => {
         {activeTab === "overview" && (
           <>
             {/* Stat cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <StatCard
                 label="Departments"
                 value={deptLoading ? "…" : departments.length}
@@ -494,6 +622,13 @@ const Setting = () => {
                 icon={Calendar}
                 description="Total holidays"
                 onClick={() => setActiveTab("holidays")}
+              />
+              <StatCard
+                label="Leave Types"
+                value={leaveTypeLoading ? "…" : leaveTypes.length}
+                icon={CalendarDays}
+                description="Casual, Sick, Week Off…"
+                onClick={() => setActiveTab("leaveTypes")}
               />
             </div>
 
@@ -715,6 +850,69 @@ const Setting = () => {
           </section>
         )}
 
+        {/* ════ LEAVE TYPES TAB ════ */}
+        {activeTab === "leaveTypes" && (
+          <section className="bg-surface rounded-xl border border-border shadow-sm">
+            <div className="px-6 py-4 border-b border-border flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold text-text-primary">Leave &amp; Holiday Sub Types</h2>
+                <p className="text-xs text-text-secondary mt-0.5">
+                  {leaveTypes.length} item{leaveTypes.length !== 1 ? "s" : ""}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <select
+                  value={leaveTypeFilter}
+                  onChange={(e) => setLeaveTypeFilter(e.target.value)}
+                  className="text-xs px-2.5 py-2 rounded-lg border border-border bg-background text-text-primary focus:outline-none focus:ring-1 focus:ring-border"
+                >
+                  <option value="ALL">All Types</option>
+                  <option value="LEAVE">Leave</option>
+                  <option value="HOLIDAY">Holiday</option>
+                </select>
+                <button
+                  onClick={() => { setEditingLeaveType(null); setLeaveTypeModalOpen(true); }}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg transition-all"
+                  style={{ backgroundColor: "var(--color-primary)", color: "var(--color-primary-foreground)" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.85")}
+                  onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
+                >
+                  + Add Sub Type
+                </button>
+              </div>
+            </div>
+            <div className="p-4 overflow-x-auto">
+              <DataTable
+                columns={leaveTypeColumns}
+                rows={leaveTypes}
+                rowIdKey="id"
+                selectable={false}
+                loading={leaveTypeLoading}
+                onEdit={(row) => { setEditingLeaveType(row); setLeaveTypeModalOpen(true); }}
+                onDelete={(row) => setDeletingLeaveType(row)}
+                emptyText="No sub types yet. Add Casual Leave, Sick Leave, Week Off etc."
+              />
+            </div>
+          </section>
+        )}
+
+        {/* ════ ATTENDANCE TAB ════ */}
+        {activeTab === "attendance" && (
+          <section className="bg-surface rounded-xl border border-border shadow-sm">
+            <div className="px-6 py-4 border-b border-border">
+              <h2 className="text-sm font-semibold text-text-primary">
+                Attendance Settings
+              </h2>
+              <p className="text-xs text-text-secondary mt-0.5">
+                Configure late buffer and check-in radius
+              </p>
+            </div>
+            <div className="p-6">
+              <AttendanceSettingSection />
+            </div>
+          </section>
+        )}
+
         {/* ════ WEBHOOK TAB ════ */}
         {activeTab === "webhook" && (
           <section className="bg-surface rounded-xl border border-border shadow-sm">
@@ -763,6 +961,26 @@ const Setting = () => {
         onSubmit={handleDesigSubmit}
         loading={desigSubmitting}
         initialValue={editingDesig?.name || ""}
+      />
+
+      <LeaveTypeCreateModal
+        open={leaveTypeModalOpen}
+        onClose={() => { setLeaveTypeModalOpen(false); setEditingLeaveType(null); }}
+        onSubmit={handleLeaveTypeSubmit}
+        loading={leaveTypeSubmitting}
+        initialData={editingLeaveType}
+      />
+
+      <ConfirmModal
+        open={!!deletingLeaveType}
+        onClose={() => setDeletingLeaveType(null)}
+        onConfirm={handleLeaveTypeDelete}
+        loading={leaveTypeDeleteLoading}
+        isDangerous
+        title="Delete Sub Type"
+        message={`Are you sure you want to delete "${deletingLeaveType?.name}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
       />
 
       <HolidayModal

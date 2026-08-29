@@ -1,13 +1,12 @@
 // verify if the checked In Location is within the radius of the office location
-const verifyLocation = (lat, lng, workLocation) => {
-  if (!workLocation) {
+const verifyLocation = (lat, lng, workLocation, radius) => {
+  if (!workLocation || !radius) {
     return true; // If workLocation is not provided, allow check-in
   }
   const parsedWorkLocation =
     typeof workLocation === "string" ? JSON.parse(workLocation) : workLocation;
   const officeLat = parsedWorkLocation?.lat; //|| 18.93858048706659; // Example office latitude
   const officeLng = parsedWorkLocation?.lng; //|| 72.83484651433764; // Example office longitude
-  const radius = 100; // Radius in meters
 
   const toRadians = (degrees) => degrees * (Math.PI / 180);
   const distance = (lat1, lng1, lat2, lng2) => {

@@ -11,5 +11,6 @@ router.put("/employee/:id", authMiddleware, adminMiddleware, validate.updateVali
 router.delete("/employee/:id", authMiddleware, adminMiddleware, validate.deleteValidationRules(), adminController.deleteEmployee);
 router.get("/employees", authMiddleware, adminMiddleware, adminController.getAllEmployees);
 router.get("/employee/:id", authMiddleware, adminMiddleware, validate.getByIdValidationRules(), adminController.getEmployeeById);
+router.patch("/employee/:id/skip-location-check", authMiddleware, adminMiddleware, adminController.toggleSkipLocationCheck);
 
 export default router;

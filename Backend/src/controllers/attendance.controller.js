@@ -36,8 +36,8 @@ export const getAllAttendance = async (req, res) => {
     // date filter
     if (startDate || endDate) {
       where.date = {};
-      if (startDate) where.date.gte = new Date(startDate);
-      if (endDate) where.date.lte = new Date(endDate);
+      if (startDate) where.date.gte = getStartOfDay(startDate);
+      if (endDate) where.date.lte = getEndOfDay(endDate);
     }
 
     // search filter
@@ -124,8 +124,8 @@ export const getAllSpecialAttendance = async (req, res) => {
     // date filter
     if (startDate || endDate) {
       where.date = {};
-      if (startDate) where.date.gte = new Date(startDate);
-      if (endDate) where.date.lte = new Date(endDate);
+      if (startDate) where.date.gte = getStartOfDay(startDate);
+      if (endDate) where.date.lte = getEndOfDay(endDate);
     }
 
     // search filter
@@ -261,13 +261,21 @@ export const checkIn = async (req, res) => {
           designation: true,
         },
       }),
-    ]).then(async ([checkInImageKey, user]) => {
+      prisma.attendanceSetting.findFirst({
+        where: { id: 1 },
+      }),
+    ]).then(async ([checkInImageKey, user, attendanceSetting]) => {
       if (!user || !checkInImageKey) {
         return error(res, 400, "Invalid user or check-in image");
       }
 
-      if (user.userType !== "BODYGUARD") {
-        const isValidLocation = verifyLocation(lat, lng, user.workLocation);
+      if (user.userType !== "BODYGUARD" && attendanceSetting?.checkInRadius && !user.skipLocationCheck) {
+        const isValidLocation = verifyLocation(
+          lat,
+          lng,
+          user.workLocation,
+          attendanceSetting.checkInRadius,
+        );
 
         if (!isValidLocation) {
           return error(
@@ -279,7 +287,7 @@ export const checkIn = async (req, res) => {
       }
 
       const status = !isTodayWeekOff(user.weekendOff)
-        ? getAttendanceStatus(user.shift)
+        ? getAttendanceStatus(user?.shift || "", attendanceSetting?.lateBufferMinutes)
         : "OVERTIME";
 
       // if user late send notification to admin, without blocking the check-in process
@@ -321,7 +329,7 @@ export const checkIn = async (req, res) => {
         location: attendance.checkInLocation,
         status: attendance.status,
         employeeType: user.userType,
-        employeeShift: user.shift,
+        employeeShift: user?.shift || "",
         employeeDepartment: user.department?.name,
         employeeDesignation: user.designation?.name,
       });
@@ -357,6 +365,9 @@ export const checkOut = async (req, res) => {
           designation: true,
         },
       }),
+      prisma.attendanceSetting.findFirst({
+        where: { id: 1 },
+      }),
       prisma.attendance.findFirst({
         where: {
           userId,
@@ -366,7 +377,7 @@ export const checkOut = async (req, res) => {
           checkInTime: "desc", // Get the most recent unchecked-out record
         },
       }),
-    ]).then(async ([user, existingAttendance]) => {
+    ]).then(async ([user, attendanceSetting, existingAttendance]) => {
       if (!existingAttendance || !user) {
         return error(res, 400, "You have not checked in yet");
       }
@@ -402,7 +413,7 @@ export const checkOut = async (req, res) => {
               checkOutImage.mimetype,
             )
           : null,
-        verifyLocation(lat, lng, user.workLocation),
+        verifyLocation(lat, lng, user?.workLocation || [], attendanceSetting?.checkInRadius || 100),
         prisma.leaveEmployee.findFirst({
           where: {
             employeeId: userId,
@@ -576,7 +587,7 @@ export const updateAttendance = async (req, res) => {
       overTime = extraTime(
         new Date(checkInTime),
         new Date(checkOutTime),
-        attendanceRecord.user.shift,
+        attendanceRecord.user?.shift || "",
         status === "OVERTIME" ? true : false,
         attendanceRecord.user.weekendOff,
         status === "HALF_DAY",

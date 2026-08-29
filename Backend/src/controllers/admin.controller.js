@@ -70,7 +70,8 @@ export const registerEmployee = async (req, res) => {
       departmentId: user.departmentId,
       designationId: user.designationId,
       userType: user.userType,
-      shift: user.shift,
+      shift: user?.shift,
+      skipLocationCheck: user?.skipLocationCheck,
       workLocation: user.workLocation,
       weekendOff: user.weekendOff,
     });
@@ -83,9 +84,9 @@ export const registerEmployee = async (req, res) => {
       departmentId: user.departmentId,
       designationId: user.designationId,
       userType: user.userType,
-      shift: user.shift,
-      workLocation: user.workLocation,
-      weekendOff: user.weekendOff,
+      shift: user?.shift,
+      workLocation: user?.workLocation,
+      weekendOff: user?.weekendOff,
       pin: tempPin, // In real application, you would send this via email/SMS instead of returning in response
     });
 
@@ -94,7 +95,6 @@ export const registerEmployee = async (req, res) => {
       "Welcome to WENS FORCE - Your Account Details",
       mailContent,
     );
-    
   } catch (error) {
     console.error("Registration error:", error);
     responses.serverError(res, "Internal server error");
@@ -145,6 +145,8 @@ export const getAllEmployees = async (req, res) => {
         ...emp,
         department: emp.department ? emp.department.name : null,
         designation: emp.designation ? emp.designation.name : null,
+        departmentId: emp.department?.id ?? null,
+        designationId: emp.designation?.id ?? null,
       };
     });
 
@@ -182,6 +184,7 @@ export const getEmployeeById = async (req, res) => {
         weekendOff: true,
         shift: true,
         userType: true,
+        skipLocationCheck: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -276,6 +279,29 @@ export const resetPin = async (req, res) => {
     return success(res, 200, "PIN has been sent", { tempPin });
   } catch (error) {
     console.error("Forgot PIN error:", error);
+    responses.serverError(res, "Internal server error");
+  }
+};
+
+export const toggleSkipLocationCheck = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { skipLocationCheck } = req.body;
+    if (typeof skipLocationCheck !== "boolean") {
+      return responses.badRequest(res, "skipLocationCheck must be a boolean");
+    }
+    await prisma.user.update({
+      where: { id: parseInt(id) },
+      data: { skipLocationCheck },
+    });
+    return success(res, 200, "Skip location check updated successfully", {
+      skipLocationCheck,
+    });
+  } catch (error) {
+    if (error.code === "P2025") {
+      return responses.notFound(res, "Employee not found");
+    }
+    console.error("Toggle skip location check error:", error);
     responses.serverError(res, "Internal server error");
   }
 };

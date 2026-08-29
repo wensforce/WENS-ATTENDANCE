@@ -1,16 +1,43 @@
 import React, { useEffect, useState } from "react";
-import { X, Loader2, Building2 } from "lucide-react";
+import { X, Loader2, CalendarDays } from "lucide-react";
 
-const DepartmentCreateModal = ({ open, onClose, onSubmit, loading = false, initialValue = null }) => {
+const SUGGESTIONS = {
+  LEAVE: [
+    "Casual Leave",
+    "Sick Leave",
+    "Paid Leave",
+    "Unpaid Leave",
+    "Maternity Leave",
+  ],
+  HOLIDAY: [
+    "Week Off",
+    "National Holiday",
+    "Festival Holiday",
+    "Optional Holiday",
+    "Company Shutdown",
+  ],
+};
+
+const LeaveTypeCreateModal = ({
+  open,
+  onClose,
+  onSubmit,
+  loading = false,
+  initialData = null,
+}) => {
   const [name, setName] = useState("");
+  const [type, setType] = useState("LEAVE");
   const [error, setError] = useState("");
+
+  const isEdit = !!initialData;
 
   useEffect(() => {
     if (open) {
-      setName(initialValue);
+      setName(initialData?.name || "");
+      setType(initialData?.type || "LEAVE");
       setError("");
     }
-  }, [open, initialValue]);
+  }, [open, initialData]);
 
   useEffect(() => {
     const handleKey = (e) => {
@@ -22,19 +49,14 @@ const DepartmentCreateModal = ({ open, onClose, onSubmit, loading = false, initi
 
   if (!open) return null;
 
-  const validate = () => {
-    if (!name.trim()) {
-      setError("Department name is required");
-      return false;
-    }
-    return true;
-  };
-
   const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!validate()) return;
+    e?.preventDefault?.();
+    if (!name.trim()) {
+      setError("Sub type name is required");
+      return;
+    }
     setError("");
-    onSubmit({ name });
+    onSubmit({ name: name.trim(), type });
   };
 
   return (
@@ -50,10 +72,12 @@ const DepartmentCreateModal = ({ open, onClose, onSubmit, loading = false, initi
         <div className="flex items-start justify-between px-6 pt-5 pb-4 shrink-0">
           <div>
             <h2 className="text-lg font-bold text-text-primary tracking-tight">
-              New Department
+              {isEdit ? "Edit Sub Type" : "New Sub Type"}
             </h2>
             <p className="text-xs text-text-muted mt-0.5">
-              Add a new department to the system
+              {isEdit
+                ? "Update sub type details"
+                : "Create a leave or holiday sub type"}
             </p>
           </div>
           <button
@@ -69,17 +93,40 @@ const DepartmentCreateModal = ({ open, onClose, onSubmit, loading = false, initi
         <form onSubmit={handleSubmit} className="px-6 pb-6 space-y-4">
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-semibold text-text-primary tracking-wide">
-              Department Name
+              Used For
+              <span className="text-absent-text ml-0.5">*</span>
+            </label>
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value)}
+              disabled={loading}
+              className="w-full px-3.5 py-2.5 text-sm rounded-xl border bg-surface text-text-primary focus:outline-none transition-all border-border focus:border-text-primary focus:ring-2 focus:ring-black/8 disabled:opacity-50"
+            >
+              <option value="LEAVE">Leave</option>
+              <option value="HOLIDAY">Holiday</option>
+            </select>
+            <p className="text-xs text-text-muted">
+              {type === "LEAVE"
+                ? "Shown when adding a leave entry"
+                : "Shown when adding a holiday entry"}
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-text-primary tracking-wide">
+              Sub Type Name
               <span className="text-absent-text ml-0.5">*</span>
             </label>
             <div className="relative">
-              <Building2
+              <CalendarDays
                 size={14}
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
               />
               <input
                 type="text"
-                placeholder="e.g. Technology, HR, Sales"
+                placeholder={
+                  type === "LEAVE" ? "e.g. Casual Leave" : "e.g. Week Off"
+                }
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 disabled={loading}
@@ -93,6 +140,22 @@ const DepartmentCreateModal = ({ open, onClose, onSubmit, loading = false, initi
               </p>
             )}
           </div>
+
+          {!isEdit && (
+            <div className="flex flex-wrap gap-2">
+              {SUGGESTIONS[type].map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setName(s)}
+                  disabled={loading}
+                  className="px-2.5 py-1 text-xs rounded-lg border border-border bg-background text-text-secondary hover:bg-surface transition-colors disabled:opacity-50"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
         </form>
 
         {/* Footer */}
@@ -122,7 +185,7 @@ const DepartmentCreateModal = ({ open, onClose, onSubmit, loading = false, initi
             }
           >
             {loading && <Loader2 size={13} className="animate-spin" />}
-            {initialValue ? "Update Department" : "Create Department"}
+            {isEdit ? "Update Sub Type" : "Create Sub Type"}
           </button>
         </div>
       </div>
@@ -130,4 +193,4 @@ const DepartmentCreateModal = ({ open, onClose, onSubmit, loading = false, initi
   );
 };
 
-export default DepartmentCreateModal;
+export default LeaveTypeCreateModal;

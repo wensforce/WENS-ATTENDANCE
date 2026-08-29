@@ -8,8 +8,10 @@ import {
   CheckCircle,
   ChevronDown,
   Check,
+  CalendarOff,
 } from "lucide-react";
 import { employeesApi } from "../../api/employeesApi.js";
+import { useLeaveSubtypeApi } from "../../api/leaveSubtypeApi.js";
 import useDebounce from "../../../../shared/hooks/useDebounce";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -20,6 +22,7 @@ const STATUS_OPTIONS = [
   { value: "OVERTIME", label: "Overtime" },
   { value: "WORK_FROM_HOME", label: "Work From Home" },
   { value: "HALF_DAY", label: "Half Day" },
+  { value: "LEAVE", label: "Leave" },
 ];
 
 const EMPTY_FORM = {
@@ -28,6 +31,8 @@ const EMPTY_FORM = {
   checkInTime: "",
   checkOutTime: "",
   status: "PRESENT",
+  subTypeId: "",
+  reason: "",
 };
 
 // ─── Field Component ──────────────────────────────────────────────────────────
@@ -104,7 +109,12 @@ const AttendanceFormModal = ({
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [showEmployeeSuggestions, setShowEmployeeSuggestions] = useState(false);
   const [selectedEmployeeName, setSelectedEmployeeName] = useState("");
+  const [leaveSubTypes, setLeaveSubTypes] = useState([]);
+  const [leaveSubTypesLoading, setLeaveSubTypesLoading] = useState(false);
   const debouncedSearch = useDebounce(employeeSearch, 300);
+
+  const isLeave = form.status === "LEAVE";
+  const needsCheckTimes = !isLeave && form.status !== "ABSENT" && form.status !== "HOLIDAY";
 
   // Initialize form with edit data or empty form
   useEffect(() => {
@@ -117,6 +127,8 @@ const AttendanceFormModal = ({
         checkInTime: editData.checkInTime ? formatTimeForInput(editData.checkInTime) : "",
         checkOutTime: editData.checkOutTime ? formatTimeForInput(editData.checkOutTime) : "",
         status: editData.status ?? "PRESENT",
+        subTypeId: editData.subTypeId ?? editData.subType?.id ?? "",
+        reason: editData.reason ?? "",
       });
       setSelectedEmployeeName(employeeName);
       setEmployeeSearch(employeeName);
@@ -156,6 +168,24 @@ const AttendanceFormModal = ({
       fetchEmployees("");
     }
   }, [debouncedSearch, open]);
+
+  // Fetch leave sub types once the Leave status is picked
+  useEffect(() => {
+    if (!open || !isLeave || leaveSubTypes.length > 0) return;
+    const load = async () => {
+      setLeaveSubTypesLoading(true);
+      try {
+        const { data } = await useLeaveSubtypeApi.fetchLeaveSubtypes("LEAVE");
+        const list = data?.leaveSubTypes || data;
+        setLeaveSubTypes(Array.isArray(list) ? list : []);
+      } catch {
+        setLeaveSubTypes([]);
+      } finally {
+        setLeaveSubTypesLoading(false);
+      }
+    };
+    load();
+  }, [open, isLeave]);
 
   const fetchEmployees = async (search = "") => {
     try {
@@ -201,7 +231,6 @@ const AttendanceFormModal = ({
 
   const handleEmployeeSelect = (emp) => {
     // Use emp.id or emp._id for userId (whichever exists in the employee object)
-    console.log("employe select");
     
     const empId = emp.id;
     setForm((prev) => ({ ...prev, userId: empId }));
@@ -242,8 +271,12 @@ const AttendanceFormModal = ({
       errs.status = "Status is required";
     }
 
-    // Only require check-in time if status is not ABSENT or HOLIDAY
-    if (form.status !== "ABSENT" && form.status !== "HOLIDAY") {
+    if (isLeave && !form.subTypeId) {
+      errs.subTypeId = "Leave type is required";
+    }
+
+    // Check times are irrelevant for leave / absent / holiday
+    if (needsCheckTimes) {
       if (!form.checkInTime.trim()) {
         errs.checkInTime = "Check-in time is required";
       }
@@ -274,6 +307,24 @@ const AttendanceFormModal = ({
     }
 
     setErrors({});
+
+    if (isLeave) {
+      const subType = leaveSubTypes.find(
+        (st) => String(st.id) === String(form.subTypeId),
+      );
+      // A leave is stored as a single-day leave entry, not an attendance row
+      onSubmit({
+        isLeave: true,
+        userId: form.userId,
+        status: "LEAVE",
+        subTypeId: Number(form.subTypeId),
+        startDate: form.date,
+        endDate: form.date,
+        reason: form.reason.trim() || subType?.name || "Leave",
+      });
+      return;
+    }
+
     onSubmit(form);
   };
 
@@ -413,7 +464,22 @@ const AttendanceFormModal = ({
             <IconInput icon={CheckCircle} selectMode={true}>
               <select
                 value={form.status}
-                onChange={set("status")}
+                onChange={(e) => {
+                  const status = e.target.value;
+                  setForm((prev) => ({
+                    ...prev,
+                    status,
+                    ...(status === "LEAVE"
+                      ? { checkInTime: "", checkOutTime: "" }
+                      : { subTypeId: "", reason: "" }),
+                  }));
+                  setErrors((prev) => ({
+                    ...prev,
+                    checkInTime: "",
+                    checkOutTime: "",
+                    subTypeId: "",
+                  }));
+                }}
                 className={`${cls(errors.status)} pr-8 appearance-none`}
               >
                 {STATUS_OPTIONS.map((option) => (
@@ -425,8 +491,53 @@ const AttendanceFormModal = ({
             </IconInput>
           </Field>
 
-          {/* Check-in and Check-out Times (only if status is not ABSENT or HOLIDAY) */}
-          {form.status !== "ABSENT" && form.status !== "HOLIDAY" && (
+          {/* Leave Sub Type */}
+          {isLeave && (
+            <>
+              <Divider label="Leave Details" />
+              <Field label="Leave Type" required error={errors.subTypeId}>
+                <IconInput icon={CalendarOff} selectMode={true}>
+                  <select
+                    value={form.subTypeId}
+                    onChange={set("subTypeId")}
+                    disabled={leaveSubTypesLoading || leaveSubTypes.length === 0}
+                    className={`${cls(errors.subTypeId)} pr-8 appearance-none disabled:opacity-50`}
+                  >
+                    <option value="">
+                      {leaveSubTypesLoading
+                        ? "Loading leave types..."
+                        : leaveSubTypes.length === 0
+                          ? "No leave types configured"
+                          : "Select leave type"}
+                    </option>
+                    {leaveSubTypes.map((st) => (
+                      <option key={st.id} value={st.id}>
+                        {st.name}
+                      </option>
+                    ))}
+                  </select>
+                </IconInput>
+                {!leaveSubTypesLoading && leaveSubTypes.length === 0 && (
+                  <p className="text-xs text-text-muted">
+                    Add leave types from Settings → Leave Types first.
+                  </p>
+                )}
+              </Field>
+
+              <Field label="Reason" error={errors.reason}>
+                <textarea
+                  placeholder="Optional note, defaults to the leave type name"
+                  value={form.reason}
+                  onChange={set("reason")}
+                  rows="2"
+                  className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-border bg-surface text-text-primary placeholder:text-text-muted focus:outline-none focus:border-text-primary focus:ring-2 focus:ring-black/8 transition-all resize-none"
+                />
+              </Field>
+            </>
+          )}
+
+          {/* Check-in and Check-out Times */}
+          {needsCheckTimes && (
             <>
               <Divider label="Check Times" />
               <div className="grid grid-cols-2 gap-4">
@@ -461,9 +572,11 @@ const AttendanceFormModal = ({
               <span className="font-semibold text-text-secondary">Current Status:</span>{" "}
               {STATUS_OPTIONS.find((opt) => opt.value === form.status)?.label}
             </p>
-            {(form.status === "ABSENT" || form.status === "HOLIDAY") && (
+            {!needsCheckTimes && (
               <p className="text-xs text-text-muted mt-1">
-                Check-in and check-out times are not required for this status.
+                {isLeave
+                  ? `Check-in and check-out times are disabled. This will be saved as a single-day leave on ${form.date || "the selected date"}.`
+                  : "Check-in and check-out times are not required for this status."}
               </p>
             )}
           </div>

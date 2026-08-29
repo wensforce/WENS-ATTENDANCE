@@ -28,6 +28,7 @@ model User {
   workLocation Json? 
   weekendOff Json?
   attendances Attendance[] 
+  skipLocationCheck Boolean? @default(false)
   specialAttendances SpecialAttendance[]
   departmentId Int?
   designationId Int?
@@ -84,9 +85,26 @@ model LeaveAndHoliday {
   status     Status   @default(LEAVE)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
-
+  subTypeId  Int?
+  subType    LeaveSubType? @relation(fields: [subTypeId], references: [id], onDelete: SetNull)
   employees LeaveEmployee[]
+  @@index([subTypeId])
   @@map("leave_and_holiday")
+}
+
+model LeaveSubType {
+  id Int @id @default(autoincrement())
+  type Type? @default(LEAVE)
+  name String @unique
+  leaves LeaveAndHoliday[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt @default(now())
+  @@map("leave_sub_type")
+}
+
+enum Type {
+  LEAVE
+  HOLIDAY
 }
 
 model LeaveEmployee {
@@ -127,6 +145,15 @@ model Webhook {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@map("webhook")
+}
+
+model AttendanceSetting {
+  id        Int      @id @default(autoincrement())
+  lateBufferMinutes Int @default(15)
+  checkInRadius Int @default(100)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@map("attendance_setting")
 }
 
 enum Status {

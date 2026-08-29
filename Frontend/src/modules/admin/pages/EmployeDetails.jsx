@@ -13,6 +13,7 @@ import {
   Hash,
   User,
   CalendarCheck,
+  CalendarOff,
   ChevronRight,
   ChevronDown,
   Lock,
@@ -20,6 +21,7 @@ import {
 import { toast } from "react-toastify";
 import { employeesApi } from "../api/employeesApi.js";
 import { attendanceApi } from "../api/attendanceApi.js";
+import { useHolidayApi } from "../api/holidayApi.js";
 import DataTable from "../components/DataTable.jsx";
 import ConfirmModal from "../../../shared/components/ConfirmModal.jsx";
 import EmployeePinModal from "../components/employee/EmployeePinModal.jsx";
@@ -162,6 +164,82 @@ const attendanceColumns = [
   },
 ];
 
+// ─── Leave Columns ─────────────────────────────────────────────────────────
+
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+const countDays = (startDate, endDate) => {
+  if (!startDate) return "—";
+  const start = new Date(startDate);
+  const end = endDate ? new Date(endDate) : start;
+  const diff = Math.floor((end - start) / 86400000) + 1;
+  return diff > 0 ? `${diff} day${diff > 1 ? "s" : ""}` : "—";
+};
+
+const leaveColumns = [
+  {
+    header: "Type",
+    key: "status",
+    render: (row) => (
+      <div className="flex items-center gap-2.5">
+        <div
+          className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+            row.status === "LEAVE" ? "bg-absent-bg" : "bg-holiday-bg"
+          }`}
+        >
+          <CalendarOff
+            size={14}
+            className={row.status === "LEAVE" ? "text-absent-text" : "text-holiday-text"}
+          />
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-text-primary truncate">
+            {row.subType?.name || (row.status === "LEAVE" ? "Leave" : "Holiday")}
+          </p>
+          <p className="text-xs text-text-muted">
+            {row.status === "LEAVE" ? "Leave" : "Holiday"}
+          </p>
+        </div>
+      </div>
+    ),
+  },
+  {
+    header: "From",
+    key: "startDate",
+    render: (row) => (
+      <span className="text-sm text-text-secondary">{formatDate(row.startDate)}</span>
+    ),
+  },
+  {
+    header: "To",
+    key: "endDate",
+    render: (row) => (
+      <span className="text-sm text-text-secondary">
+        {row.endDate ? formatDate(row.endDate) : "—"}
+      </span>
+    ),
+  },
+  {
+    header: "Duration",
+    key: "duration",
+    render: (row) => (
+      <span className="text-xs font-medium text-text-secondary">
+        {countDays(row.startDate, row.endDate)}
+      </span>
+    ),
+  },
+  {
+    header: "Reason",
+    key: "reason",
+    render: (row) => (
+      <span className="text-sm text-text-secondary">{row.reason || "—"}</span>
+    ),
+  },
+];
+
 // ─── Weekend Day Labels ────────────────────────────────────────────────────
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -193,18 +271,30 @@ const EmployeDetails = () => {
   const [selectedStatus, setSelectedStatus] = useState("");
   const [dateFilterOpen, setDateFilterOpen] = useState(false);
 
+  // Leaves & holidays for the selected month
+  const [leaves, setLeaves] = useState([]);
+  const [leavesLoading, setLeavesLoading] = useState(true);
+  const [leaveMonth, setLeaveMonth] = useState(new Date().getMonth() + 1);
+  const [leaveYear, setLeaveYear] = useState(new Date().getFullYear());
+
   // Reset PIN modals
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [pinModalOpen, setPinModalOpen] = useState(false);
   const [resetPin, setResetPin] = useState(null);
   const [isResetting, setIsResetting] = useState(false);
 
+  // Skip location check toggle
+  const [skipLocation, setSkipLocation] = useState(false);
+  const [skipLocationSaving, setSkipLocationSaving] = useState(false);
+
   // ── Fetch employee details
   const fetchEmployee = async () => {
     setEmpLoading(true);
     try {
       const { data } = await employeesApi.getEmployee(id);
-      setEmployee(data.employee || data);
+      const emp = data.employee || data;
+      setEmployee(emp);
+      setSkipLocation(Boolean(emp?.skipLocationCheck));
     } catch (err) {
       console.error("Failed to fetch employee:", err);
     } finally {
@@ -229,6 +319,25 @@ const EmployeDetails = () => {
       console.error("Failed to fetch attendance:", err);
     } finally {
       setAttLoading(false);
+    }
+  };
+
+  // ── Fetch leaves & holidays for this employee
+  const fetchLeaves = async (month = leaveMonth, year = leaveYear) => {
+    setLeavesLoading(true);
+    try {
+      const { data } = await useHolidayApi.getUserAllLeaves({
+        userId: id,
+        month,
+        year,
+      });
+      const list = data?.leaves || data;
+      setLeaves(Array.isArray(list) ? list : []);
+    } catch (err) {
+      console.error("Failed to fetch leaves:", err);
+      setLeaves([]);
+    } finally {
+      setLeavesLoading(false);
     }
   };
 
@@ -257,13 +366,39 @@ const EmployeDetails = () => {
     }
   };
 
+  // ── Toggle skip location check
+  const handleToggleSkipLocation = async () => {
+    const next = !skipLocation;
+    setSkipLocation(next);
+    setSkipLocationSaving(true);
+    try {
+      await employeesApi.toggleSkipLocationCheck(id, next);
+      setEmployee((prev) => (prev ? { ...prev, skipLocationCheck: next } : prev));
+      toast.success(
+        next
+          ? "Location check disabled for this employee"
+          : "Location check enabled for this employee",
+      );
+    } catch (err) {
+      setSkipLocation(!next);
+      toast.error(err.response?.data?.message || "Failed to update location check");
+      console.error("Failed to toggle skip location check:", err);
+    } finally {
+      setSkipLocationSaving(false);
+    }
+  };
+
   useEffect(() => { fetchEmployee(); }, [id]);
   useEffect(() => { fetchAttendance(1); }, [id, startDate, endDate, selectedStatus]);
+  useEffect(() => { fetchLeaves(leaveMonth, leaveYear); }, [id, leaveMonth, leaveYear]);
 
   // ── Derived stats from current page data
   const presentCount = attendance.filter((a) => a.status === "PRESENT" || a.status === "LATE").length;
   const absentCount = attendance.filter((a) => a.status === "ABSENT").length;
   const overtimeCount = attendance.filter((a) => a.status === "OVERTIME").length;
+
+  const leaveCount = leaves.filter((l) => l.status === "LEAVE").length;
+  const holidayCount = leaves.filter((l) => l.status === "HOLIDAY").length;
 
   const workLocation = parseJson(employee?.workLocation);
   const weekendOff = parseJson(employee?.weekendOff);
@@ -464,6 +599,37 @@ const EmployeDetails = () => {
                     <InfoRow icon={MapPin} label="Work Location" value={null} />
                   )}
 
+                  {/* Skip Location Check */}
+                  <div className="flex items-start justify-between gap-3 pt-4 border-t border-border">
+                    <div className="min-w-0">
+                      <p className="text-xs text-text-muted font-medium flex items-center gap-1">
+                        <MapPin size={13} />
+                        Skip Location Check
+                      </p>
+                      <p className="text-xs text-text-secondary mt-1">
+                        {skipLocation
+                          ? "Employee can check in from anywhere"
+                          : "Employee must be inside the work location"}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={skipLocation}
+                      onClick={handleToggleSkipLocation}
+                      disabled={skipLocationSaving}
+                      className={`relative w-11 h-6 rounded-full shrink-0 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-text-primary focus:ring-offset-1 ${
+                        skipLocation ? "bg-text-primary" : "bg-border"
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                          skipLocation ? "translate-x-5" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                  </div>
+
                   {/* Timestamps */}
                   <InfoRow
                     icon={Calendar}
@@ -491,6 +657,57 @@ const EmployeDetails = () => {
             <p className="text-text-muted">Employee not found.</p>
           </div>
         )}
+
+        {/* ── Leaves & Holidays ── */}
+        <section className="bg-surface rounded-xl border border-border shadow-sm">
+          <div className="px-6 py-4 border-b border-border flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <CalendarOff size={16} className="text-text-primary" />
+              <div>
+                <h2 className="text-sm font-semibold text-text-primary">
+                  Leaves &amp; Holidays
+                </h2>
+                <p className="text-xs text-text-secondary mt-0.5">
+                  {leavesLoading
+                    ? "Loading…"
+                    : `${leaveCount} leave${leaveCount !== 1 ? "s" : ""} · ${holidayCount} holiday${holidayCount !== 1 ? "s" : ""} in ${MONTHS[leaveMonth - 1]} ${leaveYear}`}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <select
+                value={leaveMonth}
+                onChange={(e) => setLeaveMonth(Number(e.target.value))}
+                className="px-3 py-2 text-xs bg-background border border-border rounded-lg text-text-primary focus:outline-none focus:ring-1 focus:ring-text-primary transition"
+              >
+                {MONTHS.map((m, i) => (
+                  <option key={m} value={i + 1}>{m}</option>
+                ))}
+              </select>
+              <select
+                value={leaveYear}
+                onChange={(e) => setLeaveYear(Number(e.target.value))}
+                className="px-3 py-2 text-xs bg-background border border-border rounded-lg text-text-primary focus:outline-none focus:ring-1 focus:ring-text-primary transition"
+              >
+                {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 2 + i).map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="p-4 overflow-x-auto">
+            <DataTable
+              columns={leaveColumns}
+              rows={leaves}
+              rowIdKey="id"
+              selectable={false}
+              loading={leavesLoading}
+              emptyText={`No leaves or holidays in ${MONTHS[leaveMonth - 1]} ${leaveYear}`}
+            />
+          </div>
+        </section>
 
         {/* ── Attendance History ── */}
         <section className="bg-surface rounded-xl border border-border shadow-sm">
