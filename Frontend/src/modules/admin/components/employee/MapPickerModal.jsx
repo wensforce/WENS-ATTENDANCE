@@ -5,6 +5,7 @@ import {
   loadGoogleMaps,
   GOOGLE_MAPS_MAP_ID,
 } from "../../../../shared/utils/googleMaps.js";
+import { getHighAccuracyPosition } from "../../../employes/utils/fetchCurrentLocation.js";
 
 const INDIA_CENTER = { lat: 20.5937, lng: 78.9629 };
 
@@ -213,26 +214,24 @@ const MapPickerModal = ({ open, onClose, onConfirm, loading = false }) => {
     }
   };
 
-  const getCurrentLocation = () => {
+  const getCurrentLocation = async () => {
     if (!navigator.geolocation) {
       alert("Geolocation not supported");
       return;
     }
 
     setLocationLoading(true);
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        await selectCoordinates(latitude, longitude);
-        map.current?.setZoom(16);
-        setLocationLoading(false);
-      },
-      (error) => {
-        console.error("Geolocation error:", error);
-        alert("Failed to get current location");
-        setLocationLoading(false);
-      },
-    );
+    try {
+      const position = await getHighAccuracyPosition();
+      const { latitude, longitude } = position.coords;
+      await selectCoordinates(latitude, longitude);
+      map.current?.setZoom(16);
+    } catch (error) {
+      console.error("Geolocation error:", error);
+      alert(error.message || "Failed to get current location");
+    } finally {
+      setLocationLoading(false);
+    }
   };
 
   const handleConfirm = () => {

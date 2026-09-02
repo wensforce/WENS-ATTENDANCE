@@ -503,9 +503,7 @@ export const createAttendance = async (req, res) => {
     }
 
     // validate user is not trying to create attendance for future date
-    const today = new Date();
-    const attendanceDate = new Date(date);
-    if (attendanceDate > today) {
+    if (getStartOfDay(date) > getStartOfDay(new Date())) {
       return error(res, 400, "Cannot create attendance for future date");
     }
 
@@ -514,11 +512,17 @@ export const createAttendance = async (req, res) => {
       return error(res, 400, "Check-out time must be after check-in time");
     }
 
+    const attendanceDayStart = getStartOfDay(date);
+    const attendanceDayEnd = getEndOfDay(date);
+
     // validate already existing attendance record for the user on the same date, if exists then prevent creation
     const existingAttendance = await prisma.attendance.findFirst({
       where: {
         userId: parseInt(userId),
-        date: new Date(date),
+        date: {
+          gte: attendanceDayStart,
+          lte: attendanceDayEnd,
+        },
       },
     });
     if (existingAttendance) {
@@ -537,13 +541,13 @@ export const createAttendance = async (req, res) => {
       false,
       user.weekendOff,
       status === "HALF_DAY",
-      new Date(date),
+      attendanceDayStart.getDay(),
     );
 
     const attendance = await prisma.attendance.create({
       data: {
         userId: parseInt(userId),
-        date: new Date(date),
+        date: attendanceDayStart,
         checkInTime: checkInDateTime,
         checkOutTime: checkOutDateTime,
         status,
@@ -599,7 +603,7 @@ export const updateAttendance = async (req, res) => {
       data: {
         checkInTime: checkInTime ? new Date(checkInTime) : undefined,
         checkOutTime: checkOutTime ? new Date(checkOutTime) : undefined,
-        date: date ? new Date(date) : undefined,
+        date: date ? getStartOfDay(date) : undefined,
         extraTime: overTime,
         status,
       },
@@ -816,7 +820,7 @@ export const updateSpecialAttendance = async (req, res) => {
       data: {
         checkInTime: checkInTime ? new Date(checkInTime) : undefined,
         checkOutTime: checkOutTime ? new Date(checkOutTime) : undefined,
-        date: date ? new Date(date) : undefined,
+        date: date ? getStartOfDay(date) : undefined,
         workHours,
       },
     });
@@ -839,8 +843,10 @@ export const getAttendanceCalendar = async (req, res) => {
   try {
     const { userId, month, year } = req.query;
 
-    const startDate = new Date(year, month - 1, 1);
-    const endDate = new Date(year, month, 0);
+    const startDate = getStartOfDay(new Date(year, month - 1, 1));
+    const endDate = getEndOfDay(new Date(year, month, 0));
+    const monthEnd = getStartOfDay(new Date(year, month, 0));
+    const toDateKey = (date) => formatDateOnly(new Date(date));
 
     // Fetch records in parallel
     const [
@@ -912,13 +918,13 @@ export const getAttendanceCalendar = async (req, res) => {
 
     // Create a Set of attendance dates for O(1) lookup
     const attendanceDateSet = new Set(
-      attendanceRecords.map((record) => record.date.toDateString()),
+      attendanceRecords.map((record) => toDateKey(record.date)),
     );
 
     // Create a Map for quick lookups of special records
     const specialRecordMap = new Map(
       specialAttendanceRecords.map((record) => [
-        record.date.toDateString(),
+        toDateKey(record.date),
         record,
       ]),
     );
@@ -926,17 +932,17 @@ export const getAttendanceCalendar = async (req, res) => {
     // Create a Map of holiday dates -> leaveId
     const holidayDateMap = new Map();
     holidays.forEach((holiday) => {
-      let currentDate = new Date(holiday.leave.startDate);
-      const endHolidayDate = new Date(holiday.leave.endDate);
+      let currentDate = getStartOfDay(holiday.leave.startDate);
+      const endHolidayDate = getStartOfDay(holiday.leave.endDate);
       while (currentDate <= endHolidayDate) {
-        holidayDateMap.set(currentDate.toDateString(), holiday.leave.id);
+        holidayDateMap.set(toDateKey(currentDate), holiday.leave.id);
         currentDate.setDate(currentDate.getDate() + 1);
       }
     });
 
     // Merge records with holidays and weekends
     const mergedRecords = attendanceRecords.map((record) => {
-      const specialRecord = specialRecordMap.get(record.date.toDateString());
+      const specialRecord = specialRecordMap.get(toDateKey(record.date));
       if (specialRecord) {
         return {
           id: record.id,
@@ -950,7 +956,7 @@ export const getAttendanceCalendar = async (req, res) => {
 
     // Add special attendance records that don't have a corresponding regular attendance record
     const specialOnlyRecords = specialAttendanceRecords
-      .filter((special) => !attendanceDateSet.has(special.date.toDateString()))
+      .filter((special) => !attendanceDateSet.has(toDateKey(special.date)))
       .map((special) => ({
         date: special.date,
         specialId: special.id,
@@ -958,24 +964,21 @@ export const getAttendanceCalendar = async (req, res) => {
       }));
 
     const recordsMap = new Map([
-      ...mergedRecords.map((r) => [r.date.toDateString(), r]),
-      ...specialOnlyRecords.map((r) => [r.date.toDateString(), r]),
+      ...mergedRecords.map((r) => [toDateKey(r.date), r]),
+      ...specialOnlyRecords.map((r) => [toDateKey(r.date), r]),
     ]);
 
     // Generate all dates for the month and check for missing dates
     const allDatesInMonth = [];
     let currentDate = new Date(startDate);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = getStartOfDay(new Date());
+    const todayKey = toDateKey(today);
     const oldestAttendanceDate = oldestAttendance
-      ? new Date(oldestAttendance.date)
+      ? getStartOfDay(oldestAttendance.date)
       : null;
-    if (oldestAttendanceDate) {
-      oldestAttendanceDate.setHours(0, 0, 0, 0);
-    }
 
-    while (currentDate <= endDate) {
-      const dateString = currentDate.toDateString();
+    while (currentDate <= monthEnd) {
+      const dateString = toDateKey(currentDate);
 
       if (!recordsMap.has(dateString)) {
         // Check if it's a holiday
@@ -999,7 +1002,8 @@ export const getAttendanceCalendar = async (req, res) => {
               date: formatDateOnly(currentDate),
               status: "WEEKOFF",
             });
-          } else {
+          } else if (dateString !== todayKey) {
+            // Don't mark today as absent when there's no record yet
             allDatesInMonth.push({
               date: formatDateOnly(currentDate),
               status: "ABSENT",
@@ -1011,7 +1015,7 @@ export const getAttendanceCalendar = async (req, res) => {
       else {
         allDatesInMonth.push({
           ...recordsMap.get(dateString),
-          date: formatDateOnly(new Date(recordsMap.get(dateString).date)),
+          date: toDateKey(recordsMap.get(dateString).date),
         });
       }
 
