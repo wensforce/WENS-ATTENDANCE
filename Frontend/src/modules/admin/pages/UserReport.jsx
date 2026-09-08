@@ -117,6 +117,66 @@ const Skeleton = () => (
 
 // ─── Daily Columns ───────────────────────────────────────────────────────
 
+const StatusBadge = ({ status }) => {
+  const statusMap = {
+    PRESENT: {
+      bg: "bg-present-bg",
+      text: "text-present-text",
+      label: "Present",
+    },
+    HALF_DAY: {
+      bg: "bg-halfday-bg",
+      text: "text-halfday-text",
+      label: "Half Day",
+    },
+    LATE: { bg: "bg-late-bg", text: "text-late-text", label: "Late" },
+    OVERTIME: {
+      bg: "bg-overtime-bg",
+      text: "text-overtime-text",
+      label: "Overtime",
+    },
+    WORK_FROM_HOME: {
+      bg: "bg-wfh-bg",
+      text: "text-wfh-text",
+      label: "Work From Home",
+    },
+    ABSENT: {
+      bg: "bg-absent-bg",
+      text: "text-absent-text",
+      label: "Absent",
+    },
+    LEAVE: {
+      bg: "bg-absent-bg",
+      text: "text-absent-text",
+      label: "Leave",
+    },
+    HOLIDAY: {
+      bg: "bg-holiday-bg",
+      text: "text-holiday-text",
+      label: "Holiday",
+    },
+    WEEKOFF: {
+      bg: "bg-holiday-bg",
+      text: "text-holiday-text",
+      label: "Week Off",
+    },
+  };
+
+  const config = statusMap[status] || {
+    bg: "bg-background",
+    text: "text-text-muted",
+    label: status || "—",
+  };
+
+  return (
+    <span
+      className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${config.bg} ${config.text} whitespace-nowrap`}
+    >
+      {config.label}
+    </span>
+  );
+};
+
 const buildDailyColumns = () => [
   {
     header: "Date",
@@ -133,6 +193,11 @@ const buildDailyColumns = () => [
     render: (row) => (
       <span className="text-sm text-text-secondary">{row.day || "—"}</span>
     ),
+  },
+  {
+    header: "Status",
+    key: "status",
+    render: (row) => <StatusBadge status={row.status} />,
   },
   {
     header: "Check-in",
@@ -201,6 +266,7 @@ const exportToExcel = async (data, employeeName, month, year) => {
       [
         "Date",
         "Day",
+        "Status",
         "Check-in",
         "Check-out",
         "Working Hours",
@@ -212,6 +278,7 @@ const exportToExcel = async (data, employeeName, month, year) => {
       worksheetData.push([
         record.date || "—",
         record.day || "—",
+        record.status || "—",
         record.checkin || "—",
         record.checkout || "—",
         record.workingHours || "—",
@@ -222,6 +289,7 @@ const exportToExcel = async (data, employeeName, month, year) => {
     const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
     worksheet["!cols"] = [
       { wch: 15 },
+      { wch: 12 },
       { wch: 12 },
       { wch: 12 },
       { wch: 12 },
@@ -267,11 +335,20 @@ const exportToPDF = async (data, employeeName, month, year, totalExtraTime) => {
     // Add table
     autoTable(pdf, {
       head: [
-        ["Date", "Day", "Check-in", "Check-out", "Working Hours", "OT / UT"],
+        [
+          "Date",
+          "Day",
+          "Status",
+          "Check-in",
+          "Check-out",
+          "Working Hours",
+          "OT / UT",
+        ],
       ],
       body: data.map((record) => [
         record.date || "—",
         record.day || "—",
+        record.status || "—",
         record.checkin || "—",
         record.checkout || "—",
         record.workingHours || "—",

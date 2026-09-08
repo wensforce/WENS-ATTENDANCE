@@ -4,8 +4,9 @@ import { calculateTotalExtraTime } from "../utils/attendanceUtils.js";
 import {
   getWorkingDaysInMonth,
   sumTotalWorkHours,
+  buildMonthlyUserReportRows,
 } from "../utils/reportUtils.js";
-import { calculateWorkHours, formatDateOnly } from "../utils/dateFormat.js";
+import { getStartOfDay, getEndOfDay } from "../utils/dateFormat.js";
 
 /**
  * GET /report/monthly-user-report?month=3&year=2026&page=1&limit=10&search=John
@@ -186,100 +187,86 @@ export const getMonthlyReport = async (req, res) => {
   }
 };
 
+
 export const getMonthlyReportByUserId = async (req, res) => {
   try {
     const { employeeId } = req.params;
-    let { month, year } = req.query;
-
-    // Default to current month/year if not provided
     const now = new Date();
-    month = month ? parseInt(month) : now.getMonth() + 1;
-    year = year ? parseInt(year) : now.getFullYear();
+    const month = req.query.month ? parseInt(req.query.month) : now.getMonth() + 1;
+    const year = req.query.year ? parseInt(req.query.year) : now.getFullYear();
 
     if (month < 1 || month > 12) {
       return error(res, 400, "Invalid month. Must be between 1 and 12.");
     }
 
-    // Month date range
-    const startDate = new Date(year, month - 1, 1, 0, 0, 0, 0);
-    const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+    const startDate = getStartOfDay(new Date(year, month - 1, 1));
+    const endDate = getEndOfDay(new Date(year, month, 0));
+    const monthEnd = getStartOfDay(new Date(year, month, 0));
 
-    
-    // Fetch user + all attendance records for that month in parallel
-    const [user, attendances] = await Promise.all([
-      prisma.user.findUnique({
-        where: { employeeId: employeeId },
-        select: {
-          id: true,
-          employeeName: true,
-          employeeId: true,
-          department: { select: { name: true } },
-          designation: { select: { name: true } },
-        },
-      }),
-      prisma.attendance.findMany({
-        where: {
-          user: { employeeId: employeeId },
-          date: { gte: startDate, lte: endDate },
-        },
-        select: {
-          date: true,
-          checkInTime: true,
-          checkOutTime: true,
-          extraTime: true,
-          status: true,
-        },
-        orderBy: { date: "asc" },
-      }),
-    ]);
+    // 1) Fetch all needed data
+    const [user, attendances, leaveEmployees, oldestAttendance] =
+      await Promise.all([
+        prisma.user.findUnique({
+          where: { employeeId },
+          select: {
+            id: true,
+            employeeName: true,
+            employeeId: true,
+            weekendOff: true,
+            department: { select: { name: true } },
+            designation: { select: { name: true } },
+          },
+        }),
+        prisma.attendance.findMany({
+          where: {
+            user: { employeeId },
+            date: { gte: startDate, lte: endDate },
+          },
+          select: {
+            date: true,
+            checkInTime: true,
+            checkOutTime: true,
+            extraTime: true,
+            status: true,
+          },
+          orderBy: { date: "asc" },
+        }),
+        prisma.leaveEmployee.findMany({
+          where: {
+            employee: { employeeId },
+            leave: {
+              AND: [
+                { startDate: { lte: endDate } },
+                { endDate: { gte: startDate } },
+              ],
+            },
+          },
+          include: { leave: true },
+        }),
+        prisma.attendance.findFirst({
+          where: { user: { employeeId } },
+          orderBy: { date: "asc" },
+          select: { date: true },
+        }),
+      ]);
 
     if (!user) {
       return error(res, 404, "User not found");
     }
 
-    // Calculate total overtime/undertime
-    const totalExtraTime = calculateTotalExtraTime(attendances);
-
-    // Convert to HH:MM format
-    const formatTime = (minutes) => {
-      const hrs = Math.floor(minutes / 60);
-      const mins = minutes % 60;
-      return `${String(hrs).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
-    };
-
-    // Build rows with daily details
-    const rows = attendances.map((a) => {
-      const date = new Date(a.date);
-      const dayName = date.toLocaleDateString("en-US", { weekday: "long" });
-
-      // Calculate working hours
-      let workingHours = "00:00";
-      if (a.checkInTime && a.checkOutTime) {
-        workingHours = calculateWorkHours(a.checkInTime, a.checkOutTime);
-      }
-
-      return {
-        date: formatDateOnly(date), // YYYY-MM-DD format
-        day: dayName,
-        checkin: a.checkInTime
-          ? new Date(a.checkInTime).toLocaleTimeString("en-US", {
-              hour: "2-digit",
-              minute: "2-digit",
-              hour12: true,
-            })
-          : "-",
-        checkout: a.checkOutTime
-          ? new Date(a.checkOutTime).toLocaleTimeString("en-US", {
-              hour: "2-digit",
-              minute: "2-digit",
-              hour12: true,
-            })
-          : "-",
-        workingHours,
-        overTimeUndertime: a.extraTime ?? "-",
-      };
+    // 2) Build daily rows
+    const rows = buildMonthlyUserReportRows({
+      startDate,
+      monthEnd,
+      attendances,
+      leaveEmployees,
+      weekendOff: user.weekendOff,
+      oldestAttendanceDate: oldestAttendance
+        ? getStartOfDay(oldestAttendance.date)
+        : null,
     });
 
+    // 3) Return response
     return success(res, 200, "Monthly user report fetched successfully", {
       employeeName: user.employeeName ?? "-",
       employeeId: user.employeeId ?? "-",
@@ -287,7 +274,7 @@ export const getMonthlyReportByUserId = async (req, res) => {
       designation: user.designation?.name ?? "-",
       month,
       year,
-      totalExtraTime: totalExtraTime,
+      totalExtraTime: calculateTotalExtraTime(attendances),
       rows,
     });
   } catch (err) {
@@ -296,12 +283,6 @@ export const getMonthlyReportByUserId = async (req, res) => {
   }
 };
 
-/**
- * GET /report/export-monthly-report?month=3&year=2026&search=John&userType=EMPLOYEE
- *
- * Exports complete monthly report for ALL employees (no pagination).
- * Returns all users' attendance data in a single response for bulk export/download.
- */
 export const exportMonthlyReport = async (req, res) => {
   try {
     let { month, year, search, userType } = req.query;

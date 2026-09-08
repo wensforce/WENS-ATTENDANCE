@@ -1,4 +1,9 @@
-import { isTodayWeekOff } from "./dateFormat.js";
+import {
+  isTodayWeekOff,
+  formatDateOnly,
+  getStartOfDay,
+  calculateWorkHours,
+} from "./dateFormat.js";
 
 /**
  * Calculates the number of working days in a month for a given user.
@@ -43,8 +48,6 @@ const getWorkingDaysInMonth = (year, month, weekendOff, holidays) => {
     }
   });
 
-  console.log(daysInMonth, weekendDays, leaveDays);
-  
   // Step 3: Calculate working days
   const baseWorkingDays = daysInMonth - weekendDays;
 
@@ -68,5 +71,156 @@ const sumTotalWorkHours = (attendances) => {
   return `${hours}:${minutes} hrs`;
 };
 
+const toDateKey = (date) => formatDateOnly(new Date(date));
 
-export { getWorkingDaysInMonth, sumTotalWorkHours };
+const formatClock = (time) =>
+  time
+    ? new Date(time).toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      })
+    : "-";
+
+/** Build one report row for an attendance day */
+const buildAttendanceRow = (date, attendance) => {
+  let workingHours = "00:00";
+  if (attendance.checkInTime && attendance.checkOutTime) {
+    workingHours = calculateWorkHours(
+      attendance.checkInTime,
+      attendance.checkOutTime,
+    );
+  }
+
+  return {
+    date: toDateKey(date),
+    day: date.toLocaleDateString("en-US", { weekday: "long" }),
+    checkin: formatClock(attendance.checkInTime),
+    checkout: formatClock(attendance.checkOutTime),
+    workingHours,
+    overTimeUndertime: attendance.extraTime ?? "-",
+    status: attendance.status ?? "PRESENT",
+  };
+};
+
+/** Build one report row for leave / holiday / weekoff / absent */
+const buildStatusRow = (date, status) => ({
+  date: toDateKey(date),
+  day: date.toLocaleDateString("en-US", { weekday: "long" }),
+  checkin: "-",
+  checkout: "-",
+  workingHours: "-",
+  overTimeUndertime: "-",
+  status,
+});
+
+/**
+ * Expand leave records into a map:
+ *   "YYYY-MM-DD" -> "LEAVE" | "HOLIDAY"
+ */
+const buildLeaveDateMap = (leaveEmployees) => {
+  const leaveDateMap = new Map();
+
+  for (const item of leaveEmployees) {
+    const status = item.leave.status === "HOLIDAY" ? "HOLIDAY" : "LEAVE";
+    const cursor = getStartOfDay(item.leave.startDate);
+    const end = getStartOfDay(item.leave.endDate);
+
+    while (cursor <= end) {
+      const key = toDateKey(cursor);
+      if (!leaveDateMap.has(key) || status === "HOLIDAY") {
+        leaveDateMap.set(key, status);
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  }
+
+  return leaveDateMap;
+};
+
+/**
+ * Decide status for a day with no attendance.
+ * Priority: LEAVE/HOLIDAY → WEEKOFF → ABSENT
+ * Returns null if the day should be skipped (future / before joining).
+ */
+const getMissingDayStatus = ({
+  date,
+  leaveStatus,
+  weekendOff,
+  today,
+  todayKey,
+  oldestAttendanceDate,
+}) => {
+  if (leaveStatus) return leaveStatus;
+
+  const isPastOrToday = date <= today;
+  const isAfterJoining =
+    !oldestAttendanceDate || date >= oldestAttendanceDate;
+
+  if (!isPastOrToday || !isAfterJoining) return null;
+
+  if (isTodayWeekOff(weekendOff, date.getDay())) return "WEEKOFF";
+
+  // Don't mark today as absent when there is no record yet
+  if (toDateKey(date) === todayKey) return null;
+
+  return "ABSENT";
+};
+
+/**
+ * Build full-month report rows.
+ * Flow per day:
+ *   1. Has attendance? → attendance row
+ *   2. Else leave/holiday/weekoff/absent? → status row
+ *   3. Else skip (future day / before first attendance)
+ */
+const buildMonthlyUserReportRows = ({
+  startDate,
+  monthEnd,
+  attendances,
+  leaveEmployees,
+  weekendOff,
+  oldestAttendanceDate,
+}) => {
+  const attendanceMap = new Map(
+    attendances.map((a) => [toDateKey(a.date), a]),
+  );
+  const leaveDateMap = buildLeaveDateMap(leaveEmployees);
+
+  const today = getStartOfDay(new Date());
+  const todayKey = toDateKey(today);
+  const rows = [];
+  const cursor = new Date(startDate);
+
+  while (cursor <= monthEnd) {
+    const key = toDateKey(cursor);
+    const attendance = attendanceMap.get(key);
+
+    if (attendance) {
+      rows.push(buildAttendanceRow(cursor, attendance));
+    } else {
+      const status = getMissingDayStatus({
+        date: cursor,
+        leaveStatus: leaveDateMap.get(key),
+        weekendOff,
+        today,
+        todayKey,
+        oldestAttendanceDate,
+      });
+
+      if (status) {
+        rows.push(buildStatusRow(cursor, status));
+      }
+    }
+
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return rows;
+};
+
+export {
+  getWorkingDaysInMonth,
+  sumTotalWorkHours,
+  buildMonthlyUserReportRows,
+};
