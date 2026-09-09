@@ -1,5 +1,6 @@
 import app from "./src/app.js";
 import prisma from "./lib/prisma.js";
+import { startJobs } from "./src/jobs/index.js";
 
 async function main() {
   try {
@@ -7,6 +8,7 @@ async function main() {
     console.log("Prisma connected to the database");
     app.listen(3000, () => {
       console.log("Server is running on port 3000");
+      startJobs();
     });
   } catch (error) {
     console.error("Prisma connection error:", error);

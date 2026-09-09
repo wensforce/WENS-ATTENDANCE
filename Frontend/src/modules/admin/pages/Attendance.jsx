@@ -114,6 +114,11 @@ const StatusBadge = ({ status }) => {
       text: "text-wfh-text",
       label: "Work From Home",
     },
+    ABSENT: {
+      bg: "bg-absent-bg",
+      text: "text-absent-text",
+      label: "Absent",
+    },
   };
 
   const config = statusMap[status] || statusMap.ABSENT;
@@ -510,8 +515,12 @@ const Attendance = () => {
     setAttendanceModalOpen(true);
   };
 
-  // Handle view details
+  // Handle view details — ABSENT rows open edit so admin can mark attendance
   const handleViewDetails = (row) => {
+    if (row.status === "ABSENT" && !row.checkInTime) {
+      handleEdit(row);
+      return;
+    }
     navigate(`/admin/attendance/${row.id}`);
   };
 
