@@ -1,8 +1,12 @@
 import prisma from "../../lib/prisma.js";
 import { responses, success } from "../utils/response.js";
+import { requireTenantId } from "../utils/tenant.js";
 
 export const createWebhook = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const { event, url } = req.body;
 
     if (!event || !url) {
@@ -13,6 +17,7 @@ export const createWebhook = async (req, res) => {
       data: {
         eventType: event,
         url,
+        tenantId,
       },
     });
 
@@ -25,7 +30,12 @@ export const createWebhook = async (req, res) => {
 
 export const getWebhooks = async (req, res) => {
   try {
-    const webhooks = await prisma.webhook.findMany();
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
+    const webhooks = await prisma.webhook.findMany({
+      where: { tenantId },
+    });
     return success(res, 200, "Webhooks fetched successfully", webhooks);
   } catch (error) {
     console.error("Error fetching webhooks:", error);
@@ -35,15 +45,21 @@ export const getWebhooks = async (req, res) => {
 
 export const deleteWebhook = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const { id } = req.params;
 
     if (!id) {
       return responses.badRequest(res, "Webhook ID is required.");
     }
 
-    const deletedWebhook = await prisma.webhook.delete({
-      where: { id: parseInt(id) },
+    const deleted = await prisma.webhook.deleteMany({
+      where: { id: parseInt(id), tenantId },
     });
+    if (deleted.count === 0) {
+      return responses.notFound(res, "Webhook not found");
+    }
 
     return responses.deleted(res);
   } catch (error) {
@@ -54,6 +70,9 @@ export const deleteWebhook = async (req, res) => {
 
 export const updateWebhook = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const { id } = req.params;
     const { event, url } = req.body;
 
@@ -65,8 +84,15 @@ export const updateWebhook = async (req, res) => {
       return responses.badRequest(res, "Event and URL are required.");
     }
 
+    const existing = await prisma.webhook.findFirst({
+      where: { id: parseInt(id), tenantId },
+    });
+    if (!existing) {
+      return responses.notFound(res, "Webhook not found");
+    }
+
     const updatedWebhook = await prisma.webhook.update({
-      where: { id: parseInt(id) },
+      where: { id: existing.id },
       data: {
         eventType: event,
         url,

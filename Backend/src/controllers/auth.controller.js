@@ -23,6 +23,12 @@ export const login = async (req, res) => {
         shift: true,
         weekendOff: true,
         workLocation: true,
+        tenantId: true,
+        tenant: {
+          select: {
+            bodyguardEnabled: true,
+          },
+        },
         department: {
           select: {
             name: true,
@@ -50,6 +56,7 @@ export const login = async (req, res) => {
       userId: user.id,
       email: user.email,
       mobileNumber: user.mobileNumber,
+      tenantId: user.tenantId,
       userType: user.userType,
     });
 
@@ -75,6 +82,8 @@ export const login = async (req, res) => {
 
     user.department = user.department ? user.department.name : null;
     user.designation = user.designation ? user.designation.name : null;
+    user.bodyguardEnabled = Boolean(user.tenant?.bodyguardEnabled);
+    user.tenant = undefined;
     user.pin = undefined; // Do not return PIN in response
 
     return responses.loginSuccess(res, {
@@ -108,6 +117,7 @@ export const refreshToken = async (req, res) => {
       email: user.email,
       userType: user.userType,
       mobileNumber: user.mobileNumber,
+      tenantId: user.tenantId,
     });
     // Update refresh token in database
     await prisma.user.update({
@@ -189,6 +199,11 @@ export const loggedInUser = async (req, res) => {
         shift: true,
         weekendOff: true,
         workLocation: true,
+        tenant: {
+          select: {
+            bodyguardEnabled: true,
+          },
+        },
         department: {
           select: {
             name: true,
@@ -208,6 +223,8 @@ export const loggedInUser = async (req, res) => {
 
     user.department = user.department ? user.department.name : null;
     user.designation = user.designation ? user.designation.name : null;
+    user.bodyguardEnabled = Boolean(user.tenant?.bodyguardEnabled);
+    user.tenant = undefined;
 
     return responses.loginSuccess(res, {
       user,

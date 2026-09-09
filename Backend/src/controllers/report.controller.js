@@ -7,6 +7,7 @@ import {
   buildMonthlyUserReportRows,
 } from "../utils/reportUtils.js";
 import { getStartOfDay, getEndOfDay } from "../utils/dateFormat.js";
+import { requireTenantId } from "../utils/tenant.js";
 
 /**
  * GET /report/monthly-user-report?month=3&year=2026&page=1&limit=10&search=John
@@ -20,6 +21,9 @@ import { getStartOfDay, getEndOfDay } from "../utils/dateFormat.js";
 
 export const getMonthlyReport = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     let { month, year, page = 1, limit = 10, search, userType } = req.query;
     page = parseInt(page);
     limit = parseInt(limit);
@@ -38,7 +42,7 @@ export const getMonthlyReport = async (req, res) => {
     const endDate = new Date(year, month, 0, 23, 59, 59, 999);
 
     // Build user filter
-    const userWhere = {};
+    const userWhere = { tenantId };
     if (search) {
       userWhere.OR = [
         { employeeName: { contains: search } },
@@ -82,6 +86,7 @@ export const getMonthlyReport = async (req, res) => {
         // Fetch all LeaveAndHoliday records for the current month
         prisma.leaveAndHoliday.findMany({
           where: {
+            tenantId,
             AND: [
               { startDate: { lte: endDate } },
               { endDate: { gte: startDate } },
@@ -98,6 +103,7 @@ export const getMonthlyReport = async (req, res) => {
         prisma.leaveEmployee.findMany({
           where: {
             leave: {
+              tenantId,
               AND: [
                 { startDate: { lte: endDate } },
                 { endDate: { gte: startDate } },
@@ -190,6 +196,9 @@ export const getMonthlyReport = async (req, res) => {
 
 export const getMonthlyReportByUserId = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const { employeeId } = req.params;
     const now = new Date();
     const month = req.query.month ? parseInt(req.query.month) : now.getMonth() + 1;
@@ -206,8 +215,8 @@ export const getMonthlyReportByUserId = async (req, res) => {
     // 1) Fetch all needed data
     const [user, attendances, leaveEmployees, oldestAttendance] =
       await Promise.all([
-        prisma.user.findUnique({
-          where: { employeeId },
+        prisma.user.findFirst({
+          where: { employeeId, tenantId },
           select: {
             id: true,
             employeeName: true,
@@ -219,7 +228,8 @@ export const getMonthlyReportByUserId = async (req, res) => {
         }),
         prisma.attendance.findMany({
           where: {
-            user: { employeeId },
+            tenantId,
+            user: { employeeId, tenantId },
             date: { gte: startDate, lte: endDate },
           },
           select: {
@@ -233,8 +243,9 @@ export const getMonthlyReportByUserId = async (req, res) => {
         }),
         prisma.leaveEmployee.findMany({
           where: {
-            employee: { employeeId },
+            employee: { employeeId, tenantId },
             leave: {
+              tenantId,
               AND: [
                 { startDate: { lte: endDate } },
                 { endDate: { gte: startDate } },
@@ -244,7 +255,7 @@ export const getMonthlyReportByUserId = async (req, res) => {
           include: { leave: true },
         }),
         prisma.attendance.findFirst({
-          where: { user: { employeeId } },
+          where: { tenantId, user: { employeeId, tenantId } },
           orderBy: { date: "asc" },
           select: { date: true },
         }),
@@ -285,6 +296,9 @@ export const getMonthlyReportByUserId = async (req, res) => {
 
 export const exportMonthlyReport = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     let { month, year, search, userType } = req.query;
 
     // Default to current month/year if not provided
@@ -301,7 +315,7 @@ export const exportMonthlyReport = async (req, res) => {
     const endDate = new Date(year, month, 0, 23, 59, 59, 999);
 
     // Build user filter
-    const userWhere = {};
+    const userWhere = { tenantId };
     if (search) {
       userWhere.OR = [
         { employeeName: { contains: search } },
@@ -342,6 +356,7 @@ export const exportMonthlyReport = async (req, res) => {
         // Fetch all LeaveAndHoliday records for the current month
         prisma.leaveAndHoliday.findMany({
           where: {
+            tenantId,
             AND: [
               { startDate: { lte: endDate } },
               { endDate: { gte: startDate } },
@@ -358,6 +373,7 @@ export const exportMonthlyReport = async (req, res) => {
         prisma.leaveEmployee.findMany({
           where: {
             leave: {
+              tenantId,
               AND: [
                 { startDate: { lte: endDate } },
                 { endDate: { gte: startDate } },

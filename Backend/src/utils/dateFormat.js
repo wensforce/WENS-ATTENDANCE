@@ -174,11 +174,17 @@ export const formatForDisplay = (date) => {
   return `${day}-${month}-${year}`;
 };
 
-/**
- * Get attendance status based on shift timings
- * @param {string} shift - Shift timings in format "HH:MM AM/PM - HH:MM AM/PM"
- * @returns {string} Attendance status ("PRESENT" or "LATE")
- */
+export const SHIFT_TIME_REQUIRED_MESSAGE =
+  "shift time is mandatory, contact your admin";
+
+export const requireShiftTime = (shift) => {
+  const value = typeof shift === "string" ? shift.trim() : "";
+  const [startShift, endShift] = value.split(" - ").map((part) => part?.trim());
+  if (!startShift || !endShift) {
+    throw new Error(SHIFT_TIME_REQUIRED_MESSAGE);
+  }
+  return { startShift, endShift };
+};
 
 const parseShiftTime = (timeStr) => {
   // Extract hours and minutes from time string
@@ -210,14 +216,21 @@ export const isTodayWeekOff = (weekOff, day) => {
   return weekOff ? weekOff.includes(today) : false;
 };
 
-export const getAttendanceStatus = (shift, lateBufferMinutes = 15) => {
-  // shift is in format "9:00 AM - 5:00 PM", we need to extract start time and compare with current time
-  const [startShift, endShift] = shift?.split(" - ") || [];
-
+/**
+ * Get attendance status from a check-in (or "now") against shift start + grace.
+ * @param {string} shift - Shift timings in format "HH:MM AM/PM - HH:MM AM/PM"
+ * @param {Date|string} [atTime] - Time to compare (defaults to now)
+ * @param {number} [lateBufferMinutes=15]
+ * @returns {string} Attendance status ("PRESENT" or "LATE")
+ */
+export const getAttendanceStatusAtTime = (
+  shift,
+  atTime = new Date(),
+  lateBufferMinutes = 15,
+) => {
+  const { startShift } = requireShiftTime(shift);
   const shiftStart = parseShiftTime(startShift);
 
-  // Get current time
-  const now = new Date();
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone: "Asia/Kolkata",
     hour: "numeric",
@@ -225,25 +238,28 @@ export const getAttendanceStatus = (shift, lateBufferMinutes = 15) => {
     hour12: false,
   });
 
-  const parts = formatter.formatToParts(now);
-  const currentHour = parseInt(parts.find((p) => p.type === "hour").value);
-  const currentMinutes = parseInt(parts.find((p) => p.type === "minute").value);
+  const parts = formatter.formatToParts(new Date(atTime));
+  let hour = parseInt(parts.find((p) => p.type === "hour").value, 10);
+  if (hour === 24) hour = 0;
+  const minutes = parseInt(parts.find((p) => p.type === "minute").value, 10);
 
-  // Calculate shift start time in minutes
   const shiftStartInMinutes = shiftStart.hours * 60 + shiftStart.minutes;
-
-  // Add 15-minute grace period
   const graceDeadlineInMinutes = shiftStartInMinutes + lateBufferMinutes;
+  const timeInMinutes = hour * 60 + minutes;
 
-  // Calculate current time in minutes
-  const currentTimeInMinutes = currentHour * 60 + currentMinutes;
-
-  // Check if check-in time exceeds the grace deadline
-  if (currentTimeInMinutes > graceDeadlineInMinutes) {
+  if (timeInMinutes > graceDeadlineInMinutes) {
     return "LATE";
   }
   return "PRESENT";
 };
+
+/**
+ * Get attendance status based on shift timings vs current time
+ * @param {string} shift - Shift timings in format "HH:MM AM/PM - HH:MM AM/PM"
+ * @returns {string} Attendance status ("PRESENT" or "LATE")
+ */
+export const getAttendanceStatus = (shift, lateBufferMinutes = 15) =>
+  getAttendanceStatusAtTime(shift, new Date(), lateBufferMinutes);
 
 export const extraTime = (
   checkInTime,
@@ -286,7 +302,7 @@ export const extraTime = (
 
 export const getUserShiftTimeInMinutes = (shift) => {
   // shift is in format "13:53 - 15:54", we need to extract end time and convert to minutes
-  const [startShift, endShift] = shift.split(" - ");
+  const { startShift, endShift } = requireShiftTime(shift);
   const shiftStart = parseShiftTime(startShift);
   const shiftEnd = parseShiftTime(endShift);
   const shiftStartInMinutes = shiftStart.hours * 60 + shiftStart.minutes;

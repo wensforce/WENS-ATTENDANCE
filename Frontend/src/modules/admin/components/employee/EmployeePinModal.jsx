@@ -4,7 +4,14 @@ import { toast } from "react-toastify";
 
 // ─── Employee PIN Modal ───────────────────────────────────────────────────────
 
-const EmployeePinModal = ({ open, onClose, email, pin, employeeName }) => {
+const EmployeePinModal = ({
+  open,
+  onClose,
+  email,
+  pin,
+  employeeName,
+  title = "Employee Credentials",
+}) => {
   const [copiedField, setCopiedField] = useState(null);
 
   const handleCopy = async (text, field) => {
@@ -26,7 +33,7 @@ const EmployeePinModal = ({ open, onClose, email, pin, employeeName }) => {
         <div className="px-6 py-5 border-b border-border flex items-center justify-between bg-linear-to-r from-present-bg to-surface">
           <div>
             <h2 className="text-lg font-semibold text-text-primary">
-              Employee Credentials
+              {title}
             </h2>
             <p className="text-xs text-text-secondary mt-1">
               {employeeName}

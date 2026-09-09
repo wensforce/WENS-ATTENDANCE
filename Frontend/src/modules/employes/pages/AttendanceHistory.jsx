@@ -11,8 +11,12 @@ const HolydayDeatilsModal = React.lazy(
 const AbsentModal = React.lazy(
   () => import("../components/attendance/AbsentModal"),
 );
+const RegularizeRequestModal = React.lazy(
+  () => import("../components/attendance/RegularizeRequestModal"),
+);
 import { toast } from "react-toastify";
 import calenderApi from "../api/attendanceApi";
+import { regularizeApi } from "../../../shared/api/regularizeApi";
 import useAuth from "../../login/hooks/useAuth";
 import { formatDate } from "../../../shared/utils/dateUtil";
 import AttendanceDetailsLoading from "../components/attendance/AttendanceDetailsLoading";
@@ -25,6 +29,8 @@ const AttendanceHistory = () => {
   const [specialDayDetails, setSpecialDayDetails] = useState(null);
   const [holidayDetails, setHolidayDetails] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
+  const [regularizeRequests, setRegularizeRequests] = useState([]);
+  const [regularizeOpen, setRegularizeOpen] = useState(false);
   const { user } = useAuth();
 
   // Calculate statistics for future update, currently not used in UI
@@ -83,14 +89,88 @@ const AttendanceHistory = () => {
       HOLIDAY: "bg-indigo-500",
       PRESENT_SPECIAL: "bg-violet-500",
       OVERTIME: "bg-green-600",
+      MISSING_CHECKOUT: "bg-fuchsia-400",
+      REGULARIZE_PENDING: "bg-orange-400",
     };
     return colors[status] || "";
+  };
+
+  const toDateKey = (value) => formatDate(value);
+
+  const getRecordForDate = (date) =>
+    attendanceData.find((item) => item.date?.split("T")[0] === toDateKey(date));
+
+  const getRequestForDate = (date) =>
+    regularizeRequests.find(
+      (item) => toDateKey(item.date) === toDateKey(date),
+    );
+
+  const getTileStatus = (date) => {
+    if (getRequestForDate(date)?.status === "PENDING") return "REGULARIZE_PENDING";
+    const record = getRecordForDate(date);
+    if (record?.checkInTime && !record?.checkOutTime) return "MISSING_CHECKOUT";
+    return getDateStatus(date);
+  };
+
+  const isRegularizeWindow = (date) => {
+    const day = new Date(date);
+    day.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diffDays = Math.round((today - day) / 86400000);
+    return diffDays >= 1 && diffDays <= 7;
+  };
+
+  const canRegularizeSelected = () => {
+    if (!selectedDate || !isRegularizeWindow(selectedDate)) return false;
+    const request = getRequestForDate(selectedDate);
+    if (request?.status === "APPROVED") return false;
+    const status = getDateStatus(selectedDate);
+    if (status === "ABSENT") return true;
+    const dayRecord = getRecordForDate(selectedDate);
+    if (dayRecord?.checkInTime && !dayRecord?.checkOutTime) return true;
+    if (
+      attendanceDetails &&
+      attendanceDetails.checkInTime &&
+      !attendanceDetails.checkOutTime
+    ) {
+      return true;
+    }
+    if (request?.status === "PENDING") return true;
+    return false;
+  };
+
+  const refreshMonthData = () => {
+    const month = selectedMonth.getMonth() + 1;
+    const year = selectedMonth.getFullYear();
+    calenderApi
+      .getSummary(user.id, month, year)
+      .then((res) => {
+        if (res.data) {
+          setAttendanceData(res.data?.attendance);
+        }
+      })
+      .catch((error) => {
+        if (error.handled === true) return;
+        toast.error(
+          error.message ||
+            "Error fetching attendance summary. Please try again later.",
+        );
+      });
+    regularizeApi
+      .list({ month, year, limit: 50 })
+      .then((res) => {
+        setRegularizeRequests(res.data?.requests || []);
+      })
+      .catch(() => {
+        setRegularizeRequests([]);
+      });
   };
 
   // Tile content for calendar dots
   const tileContent = ({ date, view }) => {
     if (view === "month") {
-      const status = getDateStatus(date);
+      const status = getTileStatus(date);
       if (status) {
         return (
           <div className="flex justify-center items-center mt-1">
@@ -124,6 +204,10 @@ const AttendanceHistory = () => {
 
   const handleDayClick = async (date) => {
     const status = getDateStatus(date);
+    setAttendanceDetails(null);
+    setSpecialDayDetails(null);
+    setHolidayDetails(null);
+    setRegularizeOpen(false);
 
     if (status) {
       const findData = attendanceData.find(
@@ -187,24 +271,7 @@ const AttendanceHistory = () => {
   };
 
   useEffect(() => {
-    calenderApi
-      .getSummary(
-        user.id,
-        selectedMonth.getMonth() + 1,
-        selectedMonth.getFullYear(),
-      )
-      .then((res) => {
-        if (res.data) {
-          setAttendanceData(res.data?.attendance);
-        }
-      })
-      .catch((error) => {
-        if(error.handled === true) return;
-        toast.error(
-          error.message ||
-            "Error fetching attendance summary. Please try again later.",
-        );
-      });
+    refreshMonthData();
   }, [selectedMonth, user.id]);
 
   return (
@@ -212,7 +279,9 @@ const AttendanceHistory = () => {
       {/* ── Skeleton shown while API data is loading ── */}
       {detailsLoading && <AttendanceDetailsLoading />}
 
-      {!detailsLoading && attendanceDetails?.status === "ABSENT" && (
+      {!detailsLoading &&
+        !regularizeOpen &&
+        attendanceDetails?.status === "ABSENT" && (
         <Suspense fallback={<AttendanceDetailsLoading />}>
           <AbsentModal
             isOpen={selectedDate !== null}
@@ -222,11 +291,16 @@ const AttendanceHistory = () => {
             }}
             attendanceData={attendanceDetails}
             loading={detailsLoading}
+            canRegularize={canRegularizeSelected()}
+            requestStatus={getRequestForDate(selectedDate)?.status}
+            onRegularize={() => setRegularizeOpen(true)}
           />
         </Suspense>
       )}
 
-      {!detailsLoading && (attendanceDetails?.status === "PRESENT_SPECIAL" ||
+      {!detailsLoading &&
+        !regularizeOpen &&
+        (attendanceDetails?.status === "PRESENT_SPECIAL" ||
         attendanceDetails?.status === "OVERTIME" ||
         attendanceDetails?.status === "HALF_DAY" ||
         attendanceDetails?.status === "WORK_FROM_HOME" ||
@@ -243,6 +317,9 @@ const AttendanceHistory = () => {
             attendanceData={attendanceDetails}
             specialDayData={specialDayDetails}
             loading={detailsLoading}
+            canRegularize={canRegularizeSelected()}
+            requestStatus={getRequestForDate(selectedDate)?.status}
+            onRegularize={() => setRegularizeOpen(true)}
           />
         </Suspense>
       )}
@@ -261,6 +338,26 @@ const AttendanceHistory = () => {
           />
         </Suspense>
       )}
+      <Suspense fallback={null}>
+        <RegularizeRequestModal
+          isOpen={regularizeOpen}
+          onClose={() => setRegularizeOpen(false)}
+          date={selectedDate ? formatDate(selectedDate) : ""}
+          displayDate={
+            selectedDate
+              ? selectedDate.toLocaleDateString("en-US", {
+                  year: "numeric",
+                  month: "short",
+                  day: "numeric",
+                })
+              : ""
+          }
+          existingCheckIn={attendanceDetails?.checkInTime}
+          existingCheckOut={attendanceDetails?.checkOutTime}
+          existingRequest={getRequestForDate(selectedDate)}
+          onSubmitted={refreshMonthData}
+        />
+      </Suspense>
       {/* Month Navigation */}
       <div className="flex items-center justify-between p-6 bg-surface mx-4 mt-4 rounded-2xl shadow-xs border border-primary/10">
         <button
@@ -353,6 +450,16 @@ const AttendanceHistory = () => {
           <div className="flex items-center gap-3">
             <span className="w-3 h-3 rounded-full bg-violet-500"></span>
             <span className="text-sm text-text-primary">Special Day</span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <span className="w-3 h-3 rounded-full bg-fuchsia-500"></span>
+            <span className="text-sm text-text-primary">No check-out</span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <span className="w-3 h-3 rounded-full bg-orange-400"></span>
+            <span className="text-sm text-text-primary">Regularize pending</span>
           </div>
         </div>
       </div>

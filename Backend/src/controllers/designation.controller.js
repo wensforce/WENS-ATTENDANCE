@@ -1,17 +1,21 @@
 import prisma from "../../lib/prisma.js";
 import { responses, success } from "../utils/response.js";
+import { requireTenantId } from "../utils/tenant.js";
 
 export const createDesignation = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const { name } = req.body;
-    const existingDesignation = await prisma.designation.findUnique({
-      where: { name },
+    const existingDesignation = await prisma.designation.findFirst({
+      where: { tenantId, name },
     });
     if (existingDesignation) {
       return responses.conflict(res, "Designation already exists");
     }
     const designation = await prisma.designation.create({
-      data: { name },
+      data: { name, tenantId },
     });
     return responses.created(res, {
       designation,
@@ -24,7 +28,12 @@ export const createDesignation = async (req, res) => {
 
 export const getDesignations = async (req, res) => {
   try {
-    const designations = await prisma.designation.findMany();
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
+    const designations = await prisma.designation.findMany({
+      where: { tenantId },
+    });
     return success(res, 200, "Designations retrieved successfully", {
       designations,
     });
@@ -36,9 +45,12 @@ export const getDesignations = async (req, res) => {
 
 export const getDesignationById = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const { id } = req.params;
-    const designation = await prisma.designation.findUnique({
-      where: { id: parseInt(id) },
+    const designation = await prisma.designation.findFirst({
+      where: { id: parseInt(id), tenantId },
     });
     if (!designation) {
       return responses.notFound(res, "Designation not found");
@@ -54,16 +66,31 @@ export const getDesignationById = async (req, res) => {
 
 export const updateDesignation = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const { id } = req.params;
     const { name } = req.body;
-    const existingDesignation = await prisma.designation.findUnique({
-      where: { id: parseInt(id) },
+    const existingDesignation = await prisma.designation.findFirst({
+      where: { id: parseInt(id), tenantId },
     });
     if (!existingDesignation) {
       return responses.notFound(res, "Designation not found");
     }
+
+    const nameTaken = await prisma.designation.findFirst({
+      where: {
+        tenantId,
+        name,
+        NOT: { id: existingDesignation.id },
+      },
+    });
+    if (nameTaken) {
+      return responses.conflict(res, "Designation already exists");
+    }
+
     const updatedDesignation = await prisma.designation.update({
-      where: { id: parseInt(id) },
+      where: { id: existingDesignation.id },
       data: { name },
     });
     return success(res, 200, "Designation updated successfully", {
@@ -77,16 +104,16 @@ export const updateDesignation = async (req, res) => {
 
 export const deleteDesignation = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const { id } = req.params;
-    const existingDesignation = await prisma.designation.findUnique({
-      where: { id: parseInt(id) },
+    const deleted = await prisma.designation.deleteMany({
+      where: { id: parseInt(id), tenantId },
     });
-    if (!existingDesignation) {
+    if (deleted.count === 0) {
       return responses.notFound(res, "Designation not found");
     }
-    await prisma.designation.delete({
-      where: { id: parseInt(id) },
-    });
     return success(res, 200, "Designation deleted successfully");
   } catch (error) {
     console.error("Delete designation error:", error);

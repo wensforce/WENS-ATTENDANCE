@@ -6,7 +6,16 @@ import {
   parseLocationAddress,
   formatOverTime,
 } from "../../../../shared/utils/dashboard.utils";
-const AttendanceDetailsModal = ({ isOpen, onClose, attendanceData, specialDayData, loading }) => {
+const AttendanceDetailsModal = ({
+  isOpen,
+  onClose,
+  attendanceData,
+  specialDayData,
+  loading,
+  canRegularize = false,
+  onRegularize,
+  requestStatus,
+}) => {
   const [activeTab, setActiveTab] = useState("attendance");
 
   // Map status to CSS custom property names
@@ -262,12 +271,28 @@ const AttendanceDetailsModal = ({ isOpen, onClose, attendanceData, specialDayDat
           </div>
 
           {/* Action Button */}
-          <button
-            onClick={onClose}
-            className="w-full mt-4 px-3 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors text-xs"
-          >
-            Close
-          </button>
+          <div className="mt-4 space-y-2">
+            {canRegularize && !isSpecialTab && (
+              <button
+                onClick={onRegularize}
+                className="w-full px-3 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors text-xs"
+              >
+                {requestStatus === "PENDING"
+                  ? "View regularization"
+                  : "Regularize this day"}
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className={`w-full px-3 py-2 rounded-lg font-medium transition-colors text-xs ${
+                canRegularize
+                  ? "border border-border text-text-primary hover:bg-background"
+                  : "bg-primary text-primary-foreground hover:bg-primary/90"
+              }`}
+            >
+              Close
+            </button>
+          </div>
         </div>
       </div>
     </div>

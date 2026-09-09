@@ -12,6 +12,8 @@ import notificationRoutes from "./routes/notification.route.js";
 import webhookRoutes from "./routes/webhook.route.js";
 import leaveSubtypeRoutes from "./routes/leaveSubtype.route.js";
 import attendanceSettingRoutes from "./routes/attendanceSetting.route.js";
+import regularizeRoutes from "./routes/regularize.route.js";
+import superAdminRoutes from "./routes/superAdmin.route.js";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
@@ -59,6 +61,8 @@ app.use("/api/v1/notifications", notificationRoutes);
 app.use("/api/v1/webhook", webhookRoutes);
 app.use("/api/v1/leave-subtype", leaveSubtypeRoutes);
 app.use("/api/v1/attendance-setting", attendanceSettingRoutes);
+app.use("/api/v1/regularize", regularizeRoutes);
+app.use("/api/v1/platform/tenants", superAdminRoutes);
 
 app.use(express.static(path.join(__dirname, "../../Frontend/dist"), {
   dotfiles: "allow"

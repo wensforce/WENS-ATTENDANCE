@@ -1,7 +1,12 @@
 import prisma from "../../lib/prisma.js";
 
-async function sendWebhooks(event, payload) {
-  const hooks = await prisma.webhook.findMany({ where: { eventType: event } });
+async function sendWebhooks(event, payload, tenantId) {
+  const hooks = await prisma.webhook.findMany({
+    where: {
+      eventType: event,
+      ...(tenantId ? { tenantId } : {}),
+    },
+  });
 
   for (const hook of hooks) {
     fireWebhook(hook, event, payload); // fire and forget, don't block response

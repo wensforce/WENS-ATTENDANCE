@@ -1,15 +1,19 @@
 import prisma from "../../lib/prisma.js";
 import { responses, success } from "../utils/response.js";
+import { requireTenantId } from "../utils/tenant.js";
 
 export const createLeaveSubType = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const type = req.body?.type?.trim();
     if (type !== "LEAVE" && type !== "HOLIDAY") return responses.badRequest(res, "Invalid type");
     const name = req.body?.name?.trim();
     if (!name) return responses.badRequest(res, "Name is required");
 
     const leaveSubType = await prisma.leaveSubType.create({
-      data: { name, type },
+      data: { name, type, tenantId },
     });
     return responses.created(res, leaveSubType);
   } catch (error) {
@@ -22,12 +26,15 @@ export const createLeaveSubType = async (req, res) => {
 
 export const getAllLeaveSubTypes = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const type = req.query?.type?.trim();
     if (type && type !== "LEAVE" && type !== "HOLIDAY") {
       return responses.badRequest(res, "Invalid type");
     }
     const leaveSubTypes = await prisma.leaveSubType.findMany({
-      where: type ? { type } : undefined,
+      where: type ? { tenantId, type } : { tenantId },
       orderBy: [{ type: "asc" }, { name: "asc" }],
     });
     return success(res, 200, "Leave sub types fetched successfully", leaveSubTypes);
@@ -38,14 +45,24 @@ export const getAllLeaveSubTypes = async (req, res) => {
 
 export const updateLeaveSubType = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const { id } = req.params;
     const type = req.body?.type?.trim();
     if (type !== "LEAVE" && type !== "HOLIDAY") return responses.badRequest(res, "Invalid type");
     const name = req.body?.name?.trim();
     if (!name) return responses.badRequest(res, "Name is required");
 
+    const existing = await prisma.leaveSubType.findFirst({
+      where: { id: parseInt(id), tenantId },
+    });
+    if (!existing) {
+      return responses.notFound(res, "Leave type not found");
+    }
+
     const leaveSubType = await prisma.leaveSubType.update({
-      where: { id: parseInt(id) },
+      where: { id: existing.id },
       data: { name, type },
     });
     return responses.updated(res, leaveSubType);
@@ -62,10 +79,16 @@ export const updateLeaveSubType = async (req, res) => {
 
 export const deleteLeaveSubType = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const { id } = req.params;
-    await prisma.leaveSubType.delete({
-      where: { id: parseInt(id) },
+    const deleted = await prisma.leaveSubType.deleteMany({
+      where: { id: parseInt(id), tenantId },
     });
+    if (deleted.count === 0) {
+      return responses.notFound(res, "Leave type not found");
+    }
     return responses.deleted(res);
   } catch (error) {
     if (error.code === "P2025") {

@@ -1,40 +1,37 @@
-import React, { useState, useCallback, memo, useEffect } from 'react';
-import { Navigate, Outlet, useNavigate } from 'react-router-dom';
-import useAuth from '../modules/login/hooks/useAuth.js';
-import { getHomePath } from './roleHome.js';
-import Sidebar from '../modules/admin/components/Sidebar.jsx';
-import { requestNotificationPermission } from '../shared/hooks/usePushNotification.js';
+import React, { useState, useCallback, memo } from "react";
+import { Navigate, Outlet, useNavigate } from "react-router-dom";
+import { Building2 } from "lucide-react";
+import useAuth from "../modules/login/hooks/useAuth.js";
+import Sidebar from "../modules/admin/components/Sidebar.jsx";
+import { getHomePath } from "./roleHome";
 
-// Memoised so it never re-renders when sidebar state changes
+const PLATFORM_NAV = [
+  { label: "Companies", icon: Building2, to: "/platform/tenants" },
+];
+
 const PageContent = memo(({ marginLeft }) => (
   <div
     className="flex-1 min-w-0 overflow-auto"
-    style={{ marginLeft, transition: 'margin-left 300ms ease-in-out' }}
+    style={{ marginLeft, transition: "margin-left 300ms ease-in-out" }}
   >
     <Outlet />
   </div>
 ));
-PageContent.displayName = 'PageContent';
+PageContent.displayName = "PageContent";
 
-const AdminProtectedRoute = () => {
+const SuperAdminProtectedRoute = () => {
   const { user, loading, logout } = useAuth();
   const navigate = useNavigate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const handleLogout = useCallback(async () => {
     await logout();
-    navigate('/login');
+    navigate("/login");
   }, [logout, navigate]);
 
   const handleToggle = useCallback(() => {
     setSidebarCollapsed((v) => !v);
   }, []);
-
-   useEffect(() => {
-      if (user) {
-        requestNotificationPermission();
-      }
-    }, [user]);
 
   if (loading) {
     return (
@@ -51,11 +48,9 @@ const AdminProtectedRoute = () => {
     return <Navigate to="/login" replace />;
   }
 
-  if (user?.userType !== 'ADMIN') {
+  if (user?.userType !== "SUPERADMIN") {
     return <Navigate to={getHomePath(user)} replace />;
   }
-
- 
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -64,10 +59,13 @@ const AdminProtectedRoute = () => {
         onToggle={handleToggle}
         onLogout={handleLogout}
         user={user}
+        title="WENS Platform"
+        homeTo="/platform/tenants"
+        navItems={PLATFORM_NAV}
       />
-      <PageContent marginLeft={sidebarCollapsed ? '4rem' : '15rem'} />
+      <PageContent marginLeft={sidebarCollapsed ? "4rem" : "15rem"} />
     </div>
   );
 };
 
-export default AdminProtectedRoute;
+export default SuperAdminProtectedRoute;

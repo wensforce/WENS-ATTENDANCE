@@ -1,6 +1,7 @@
 import React, { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import useAuth from "../hooks/useAuth.js";
+import { getHomePath } from "../../../routes/roleHome.js";
 import { HelpCircle } from "lucide-react";
 import wensLogo from "/icons/logo.png";
 
@@ -58,14 +59,7 @@ const Login = () => {
       if (result.error) {
         return setError(result.message || "Something went wrong");
       }
-      if (result.data.user.userType === "ADMIN") {
-        navigate("/admin/dashboard");
-      } else if (
-        result.data.user.userType === "BODYGUARD" ||
-        result.data.user.userType === "EMPLOYEE"
-      ) {
-        navigate("/");
-      }
+      navigate(getHomePath(result.data.user));
     } catch (error) {
       
       setError(

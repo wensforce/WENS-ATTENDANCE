@@ -1,12 +1,13 @@
 import React, { useEffect } from "react";
 import { Navigate, Outlet } from "react-router-dom";
 import useAuth from "../modules/login/hooks/useAuth";
+import { getHomePath } from "./roleHome";
 import BottomNavigation from "../modules/employes/components/BottomNavigation";
 import Navbar from "../modules/employes/components/Navbar";
 import { requestNotificationPermission } from "../shared/hooks/usePushNotification";
 
 const UserProtectedRoute = () => {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, user } = useAuth();
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -26,9 +27,12 @@ const UserProtectedRoute = () => {
     );
   }
 
-  // If not authenticated, redirect to login
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (user?.userType === "SUPERADMIN") {
+    return <Navigate to={getHomePath(user)} replace />;
   }
 
   // If authenticated, render child routes

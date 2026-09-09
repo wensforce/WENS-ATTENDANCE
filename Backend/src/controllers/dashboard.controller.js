@@ -9,9 +9,13 @@ import {
   calculateTotalExtraTime,
 } from "../utils/attendanceUtils.js";
 import { responses, success } from "../utils/response.js";
+import { requireTenantId } from "../utils/tenant.js";
 
 export const getUserDashboard = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const userId = req.user.userId;
     const userType = req.user.userType;
 
@@ -19,6 +23,7 @@ export const getUserDashboard = async (req, res) => {
       prisma.attendance.findFirst({
         where: {
           userId,
+          tenantId,
           checkInTime: {
             gte: getStartOfDay(),
             lte: getEndOfDay(),
@@ -28,6 +33,7 @@ export const getUserDashboard = async (req, res) => {
       prisma.attendance.findMany({
         where: {
           userId,
+          tenantId,
           checkInTime: {
             gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
           },
@@ -41,6 +47,7 @@ export const getUserDashboard = async (req, res) => {
         ? prisma.specialAttendance.findFirst({
             where: {
               userId,
+              tenantId,
               date: {
                 gte: getStartOfDay(),
                 lte: getEndOfDay(),
@@ -68,6 +75,9 @@ export const getUserDashboard = async (req, res) => {
 
 export const getAdminDashboard = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const now = new Date();
     const startOfDay = getStartOfDay();
     const endOfDay = getEndOfDay();
@@ -82,11 +92,12 @@ export const getAdminDashboard = async (req, res) => {
       deptUsers,
       departments,
     ] = await Promise.all([
-      prisma.user.count(),
+      prisma.user.count({ where: { tenantId } }),
 
       // Today's attendance with user info
       prisma.attendance.findMany({
         where: {
+          tenantId,
           checkInTime: { gte: startOfDay, lte: endOfDay },
         },
         select: {
@@ -109,6 +120,7 @@ export const getAdminDashboard = async (req, res) => {
       // Last 7 days attendance
       prisma.attendance.findMany({
         where: {
+          tenantId,
           checkInTime: { gte: sixDaysAgo, lte: now },
         },
         select: { checkInTime: true },
@@ -117,11 +129,13 @@ export const getAdminDashboard = async (req, res) => {
       // Users grouped by department
       prisma.user.groupBy({
         by: ["departmentId"],
+        where: { tenantId },
         _count: { id: true },
       }),
 
       // Fetch all departments for mapping
       prisma.department.findMany({
+        where: { tenantId },
         select: { id: true, name: true },
       }),
     ]);

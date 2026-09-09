@@ -7,9 +7,13 @@ import {
   sendEmail,
 } from "../services/mail.service.js";
 import { sendWebhooks } from "../utils/webhook.js";
+import { requireTenantId, isBodyguardEnabledForTenant } from "../utils/tenant.js";
 
 export const registerEmployee = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const {
       email,
       employeeName,
@@ -23,7 +27,7 @@ export const registerEmployee = async (req, res) => {
       weekendOff,
       joinDate,
     } = req.body;
-    // Check if user already exists
+    // Email/mobile are unique across the whole app
     const existingUser = await prisma.user.findFirst({
       where: {
         OR: [{ email: email }, { mobileNumber: mobileNumber }],
@@ -35,6 +39,32 @@ export const registerEmployee = async (req, res) => {
         "User with this email or mobile number already exists",
       );
     }
+
+    const [department, designation] = await Promise.all([
+      prisma.department.findFirst({
+        where: { id: Number(departmentId), tenantId },
+      }),
+      prisma.designation.findFirst({
+        where: { id: Number(designationId), tenantId },
+      }),
+    ]);
+    if (!department || !designation) {
+      return responses.badRequest(
+        res,
+        "Invalid department or designation for this company",
+      );
+    }
+
+    if (userType === "BODYGUARD") {
+      const bodyguardEnabled = await isBodyguardEnabledForTenant(tenantId);
+      if (!bodyguardEnabled) {
+        return responses.badRequest(
+          res,
+          "Bodyguard service is not enabled for this company",
+        );
+      }
+    }
+
     // Generate a temporary PIN or token for resetting the PIN 4 digits
     const tempPin = Math.floor(1000 + Math.random() * 9000).toString();
     const hashedPin = await bcrypt.hash(tempPin, 10);
@@ -53,6 +83,7 @@ export const registerEmployee = async (req, res) => {
         userType: userType,
         pin: hashedPin,
         joinDate: joinDate,
+        tenantId,
       },
     });
 
@@ -62,19 +93,23 @@ export const registerEmployee = async (req, res) => {
       tempPin,
     );
 
-    sendWebhooks("user_registered", {
-      email: user.email,
-      employeeName: user.employeeName,
-      mobileNumber: user.mobileNumber,
-      employeeId: user.employeeId,
-      departmentId: user.departmentId,
-      designationId: user.designationId,
-      userType: user.userType,
-      shift: user?.shift,
-      skipLocationCheck: user?.skipLocationCheck,
-      workLocation: user.workLocation,
-      weekendOff: user.weekendOff,
-    });
+    sendWebhooks(
+      "user_registered",
+      {
+        email: user.email,
+        employeeName: user.employeeName,
+        mobileNumber: user.mobileNumber,
+        employeeId: user.employeeId,
+        departmentId: user.departmentId,
+        designationId: user.designationId,
+        userType: user.userType,
+        shift: user?.shift,
+        skipLocationCheck: user?.skipLocationCheck,
+        workLocation: user.workLocation,
+        weekendOff: user.weekendOff,
+      },
+      tenantId,
+    );
 
     return responses.created(res, {
       email: user.email,
@@ -96,6 +131,10 @@ export const registerEmployee = async (req, res) => {
       mailContent,
     );
   } catch (error) {
+    // employee id already exists
+    if (error.code === "P2003" && error.meta.target.includes("employeeId")) {
+      return responses.conflict(res, "Employee ID already exists");
+    }
     console.error("Registration error:", error);
     responses.serverError(res, "Internal server error");
   }
@@ -103,21 +142,31 @@ export const registerEmployee = async (req, res) => {
 
 export const getAllEmployees = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const search = req.query.search || "";
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
+    const where = {
+      tenantId,
+      ...(search
+        ? {
+            OR: [
+              { employeeName: { contains: search } },
+              { email: { contains: search } },
+              { mobileNumber: { contains: search } },
+              { employeeId: { contains: search } },
+            ],
+          }
+        : {}),
+    };
+
     let [employees, totalCount] = await Promise.all([
       prisma.user.findMany({
-        where: {
-          OR: [
-            { employeeName: { contains: search } },
-            { email: { contains: search } },
-            { mobileNumber: { contains: search } },
-            { employeeId: { contains: search } },
-          ],
-        },
+        where,
         skip,
         take: limit,
         select: {
@@ -135,7 +184,7 @@ export const getAllEmployees = async (req, res) => {
           joinDate: true,
         },
       }),
-      prisma.user.count(),
+      prisma.user.count({ where }),
     ]);
 
     const totalPages = Math.ceil(totalCount / limit);
@@ -169,9 +218,12 @@ export const getAllEmployees = async (req, res) => {
 
 export const getEmployeeById = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const { id } = req.params;
-    const employee = await prisma.user.findUnique({
-      where: { id: parseInt(id) },
+    const employee = await prisma.user.findFirst({
+      where: { id: parseInt(id), tenantId },
       select: {
         id: true,
         employeeName: true,
@@ -201,6 +253,9 @@ export const getEmployeeById = async (req, res) => {
 
 export const updateEmployee = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const { id } = req.params;
     const {
       employeeName,
@@ -211,8 +266,37 @@ export const updateEmployee = async (req, res) => {
       weekendOff,
       joinDate,
     } = req.body;
+
+    const existing = await prisma.user.findFirst({
+      where: { id: parseInt(id), tenantId },
+    });
+    if (!existing) {
+      return responses.notFound(res, "Employee not found");
+    }
+
+    if (departmentId || designationId) {
+      const [department, designation] = await Promise.all([
+        departmentId
+          ? prisma.department.findFirst({
+              where: { id: Number(departmentId), tenantId },
+            })
+          : Promise.resolve(true),
+        designationId
+          ? prisma.designation.findFirst({
+              where: { id: Number(designationId), tenantId },
+            })
+          : Promise.resolve(true),
+      ]);
+      if (!department || !designation) {
+        return responses.badRequest(
+          res,
+          "Invalid department or designation for this company",
+        );
+      }
+    }
+
     const employee = await prisma.user.update({
-      where: { id: parseInt(id) },
+      where: { id: existing.id },
       data: {
         employeeName,
         departmentId: Number(departmentId),
@@ -235,11 +319,17 @@ export const updateEmployee = async (req, res) => {
 
 export const deleteEmployee = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const { id } = req.params;
 
-    await prisma.user.delete({
-      where: { id: parseInt(id) },
+    const deleted = await prisma.user.deleteMany({
+      where: { id: parseInt(id), tenantId },
     });
+    if (deleted.count === 0) {
+      return responses.notFound(res, "Employee not found or already deleted");
+    }
 
     return responses.deleted(res);
   } catch (error) {
@@ -256,10 +346,14 @@ export const deleteEmployee = async (req, res) => {
 
 export const resetPin = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const { email, mobileNumber } = req.body;
-    // Find user by email or mobile number
+    // Find user by email or mobile number within this company
     const user = await prisma.user.findFirst({
       where: {
+        tenantId,
         OR: [{ email: email }, { mobileNumber: mobileNumber }],
       },
     });
@@ -285,15 +379,21 @@ export const resetPin = async (req, res) => {
 
 export const toggleSkipLocationCheck = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const { id } = req.params;
     const { skipLocationCheck } = req.body;
     if (typeof skipLocationCheck !== "boolean") {
       return responses.badRequest(res, "skipLocationCheck must be a boolean");
     }
-    await prisma.user.update({
-      where: { id: parseInt(id) },
+    const updated = await prisma.user.updateMany({
+      where: { id: parseInt(id), tenantId },
       data: { skipLocationCheck },
     });
+    if (updated.count === 0) {
+      return responses.notFound(res, "Employee not found");
+    }
     return success(res, 200, "Skip location check updated successfully", {
       skipLocationCheck,
     });

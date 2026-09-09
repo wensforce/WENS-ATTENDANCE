@@ -1,11 +1,15 @@
 import prisma from "../../lib/prisma.js";
 import { responses, success } from "../utils/response.js";
+import { requireTenantId } from "../utils/tenant.js";
 
 export const createDepartment = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const { name } = req.body;
-    const existingDepartment = await prisma.department.findUnique({
-      where: { name },
+    const existingDepartment = await prisma.department.findFirst({
+      where: { tenantId, name },
     });
     if (existingDepartment) {
       return responses.conflict(
@@ -14,7 +18,7 @@ export const createDepartment = async (req, res) => {
       );
     }
     const department = await prisma.department.create({
-      data: { name },
+      data: { name, tenantId },
     });
     return responses.created(res, {
       department,
@@ -27,7 +31,12 @@ export const createDepartment = async (req, res) => {
 
 export const getDepartments = async (req, res) => {
   try {
-    const departments = await prisma.department.findMany();
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
+    const departments = await prisma.department.findMany({
+      where: { tenantId },
+    });
     return success(res, 200, "Departments retrieved successfully", {
       departments,
     });
@@ -39,9 +48,12 @@ export const getDepartments = async (req, res) => {
 
 export const getDepartmentById = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const { id } = req.params;
-    const department = await prisma.department.findUnique({
-      where: { id: parseInt(id) },
+    const department = await prisma.department.findFirst({
+      where: { id: parseInt(id), tenantId },
     });
     if (!department) {
       return responses.notFound(res, "Department not found");
@@ -57,16 +69,34 @@ export const getDepartmentById = async (req, res) => {
 
 export const updateDepartment = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const { id } = req.params;
     const { name } = req.body;
-    const existingDepartment = await prisma.department.findUnique({
-      where: { id: parseInt(id) },
+    const existingDepartment = await prisma.department.findFirst({
+      where: { id: parseInt(id), tenantId },
     });
     if (!existingDepartment) {
       return responses.notFound(res, "Department not found");
     }
+
+    const nameTaken = await prisma.department.findFirst({
+      where: {
+        tenantId,
+        name,
+        NOT: { id: existingDepartment.id },
+      },
+    });
+    if (nameTaken) {
+      return responses.conflict(
+        res,
+        "Department with this name already exists",
+      );
+    }
+
     const updatedDepartment = await prisma.department.update({
-      where: { id: parseInt(id) },
+      where: { id: existingDepartment.id },
       data: { name },
     });
     return responses.updated(res, {
@@ -80,16 +110,16 @@ export const updateDepartment = async (req, res) => {
 
 export const deleteDepartment = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const { id } = req.params;
-    const existingDepartment = await prisma.department.findUnique({
-      where: { id: parseInt(id) },
+    const deleted = await prisma.department.deleteMany({
+      where: { id: parseInt(id), tenantId },
     });
-    if (!existingDepartment) {
+    if (deleted.count === 0) {
       return responses.notFound(res, "Department not found");
     }
-    await prisma.department.delete({
-      where: { id: parseInt(id) },
-    });
     return responses.deleted(res);
   } catch (error) {
     console.error("Delete department error:", error);

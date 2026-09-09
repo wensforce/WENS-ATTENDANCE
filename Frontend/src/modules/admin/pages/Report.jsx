@@ -395,7 +395,9 @@ const Report = () => {
                     <option value="">All User Types</option>
                     <option value="EMPLOYEE">Employee</option>
                     <option value="ADMIN">Admin</option>
-                    <option value="BODYGUARD">Bodyguard</option>
+                    {user?.bodyguardEnabled && (
+                      <option value="BODYGUARD">Bodyguard</option>
+                    )}
                   </select>
                 </div>
 

@@ -182,6 +182,12 @@ const Home = () => {
   }, []);
 
   useEffect(() => {
+    if (!(user?.userType === "BODYGUARD" && user?.bodyguardEnabled)) {
+      setIsSpecialDuty(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
     if (justCheckedIn) {
       const timer = setTimeout(() => {
         setJustCheckedIn(false);
@@ -211,7 +217,7 @@ const Home = () => {
         </div>
 
         {/* Special Duty Toggle */}
-        {user.userType === "BODYGUARD" && (
+        {user.userType === "BODYGUARD" && user.bodyguardEnabled && (
           <button
             aria-label="special duty toggle"
             onClick={handleSpecialDutyToggle}

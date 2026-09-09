@@ -5,6 +5,8 @@ import {
   getAttendanceStatus,
   extraTime,
   getUserShiftTimeInMinutes,
+  requireShiftTime,
+  SHIFT_TIME_REQUIRED_MESSAGE,
   isTodayWeekOff,
   formatDateOnly,
   calculateWorkHours,
@@ -14,9 +16,20 @@ import { success, error } from "../utils/response.js";
 import { verifyLocation } from "../utils/verifyLocation.js";
 import sendNotification from "../services/sendNotification.js";
 import { sendWebhooks } from "../utils/webhook.js";
+import { requireTenantId, requireBodyguardEnabled } from "../utils/tenant.js";
+
+const respondIfShiftMissing = (res, err) => {
+  if (err?.message === SHIFT_TIME_REQUIRED_MESSAGE) {
+    return error(res, 400, SHIFT_TIME_REQUIRED_MESSAGE);
+  }
+  return null;
+};
 
 export const getAllAttendance = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const {
       page = 1,
       limit = 20,
@@ -26,7 +39,7 @@ export const getAllAttendance = async (req, res) => {
       userId,
     } = req.query;
 
-    const where = {};
+    const where = { tenantId };
 
     // userId filter
     if (userId) {
@@ -105,6 +118,9 @@ export const getAllAttendance = async (req, res) => {
 
 export const getAllSpecialAttendance = async (req, res) => {
   try {
+    const tenantId = await requireBodyguardEnabled(req, res);
+    if (!tenantId) return;
+
     const {
       page = 1,
       limit = 20,
@@ -114,7 +130,7 @@ export const getAllSpecialAttendance = async (req, res) => {
       userId,
     } = req.query;
 
-    const where = {};
+    const where = { tenantId };
 
     // userId filter
     if (userId) {
@@ -196,6 +212,9 @@ export const getAllSpecialAttendance = async (req, res) => {
 
 export const checkIn = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const userId = req.user.userId;
     const checkInImage = req.file;
     const { lat, lng, address } = req.body;
@@ -216,6 +235,7 @@ export const checkIn = async (req, res) => {
       prisma.attendance.findFirst({
         where: {
           userId,
+          tenantId,
           checkInTime: {
             gte: startOfDay,
             lte: endOfDay,
@@ -226,6 +246,7 @@ export const checkIn = async (req, res) => {
       prisma.SpecialAttendance.findFirst({
         where: {
           userId,
+          tenantId,
           checkInTime: {
             gte: startOfDay,
             lte: endOfDay,
@@ -262,7 +283,7 @@ export const checkIn = async (req, res) => {
         },
       }),
       prisma.attendanceSetting.findFirst({
-        where: { id: 1 },
+        where: { tenantId },
       }),
     ]).then(async ([checkInImageKey, user, attendanceSetting]) => {
       if (!user || !checkInImageKey) {
@@ -286,15 +307,21 @@ export const checkIn = async (req, res) => {
         }
       }
 
+      try {
+        requireShiftTime(user.shift);
+      } catch (err) {
+        return error(res, 400, err.message);
+      }
+
       const status = !isTodayWeekOff(user.weekendOff)
-        ? getAttendanceStatus(user?.shift || "", attendanceSetting?.lateBufferMinutes)
+        ? getAttendanceStatus(user.shift, attendanceSetting?.lateBufferMinutes)
         : "OVERTIME";
 
       // if user late send notification to admin, without blocking the check-in process
       if (status === "LATE") {
         prisma.user
           .findMany({
-            where: { userType: "ADMIN" },
+            where: { userType: "ADMIN", tenantId },
             select: { deviceId: true },
           })
           .then((admins) => {
@@ -315,6 +342,7 @@ export const checkIn = async (req, res) => {
       const attendance = await prisma.attendance.create({
         data: {
           userId,
+          tenantId,
           date: new Date(),
           checkInTime: new Date(),
           checkInLocation: JSON.stringify({ lat, lng, address }),
@@ -323,16 +351,20 @@ export const checkIn = async (req, res) => {
         },
       });
 
-      sendWebhooks("check_in", {
-        employeName: user.employeeName,
-        dateAndTime: attendance.checkInTime,
-        location: attendance.checkInLocation,
-        status: attendance.status,
-        employeeType: user.userType,
-        employeeShift: user?.shift || "",
-        employeeDepartment: user.department?.name,
-        employeeDesignation: user.designation?.name,
-      });
+      sendWebhooks(
+        "check_in",
+        {
+          employeName: user.employeeName,
+          dateAndTime: attendance.checkInTime,
+          location: attendance.checkInLocation,
+          status: attendance.status,
+          employeeType: user.userType,
+          employeeShift: user?.shift || "",
+          employeeDepartment: user.department?.name,
+          employeeDesignation: user.designation?.name,
+        },
+        tenantId,
+      );
 
       return success(res, 201, "Check-in successful", attendance);
     });
@@ -344,6 +376,9 @@ export const checkIn = async (req, res) => {
 
 export const checkOut = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const userId = req.user.userId;
     const checkOutImage = req.file;
     const { lat, lng, address } = req.body;
@@ -366,11 +401,12 @@ export const checkOut = async (req, res) => {
         },
       }),
       prisma.attendanceSetting.findFirst({
-        where: { id: 1 },
+        where: { tenantId },
       }),
       prisma.attendance.findFirst({
         where: {
           userId,
+          tenantId,
           checkOutTime: null, // Must not have checked out yet
         },
         orderBy: {
@@ -394,7 +430,13 @@ export const checkOut = async (req, res) => {
 
       // user shift is in format "9:00 AM - 5:00 PM", we need to extract end time and convert to minutes
       if (isDateChanged) {
-        const maxAllowedMinutes = getUserShiftTimeInMinutes(user.shift) + 60; // 60 min buffer
+        let maxAllowedMinutes;
+        try {
+          maxAllowedMinutes = getUserShiftTimeInMinutes(user.shift) + 60; // 60 min buffer
+        } catch (err) {
+          if (respondIfShiftMissing(res, err)) return;
+          throw err;
+        }
 
         if (timeDifferenceMinutes > maxAllowedMinutes) {
           return error(
@@ -418,6 +460,7 @@ export const checkOut = async (req, res) => {
           where: {
             employeeId: userId,
             leave: {
+              tenantId,
               AND: [
                 { startDate: { lte: getEndOfDay() } },
                 { endDate: { gte: getStartOfDay() } },
@@ -436,13 +479,18 @@ export const checkOut = async (req, res) => {
         // calculate overtime if checkout done
         let overTime = 0;
         if (existingAttendance.checkInTime) {
-          overTime = extraTime(
-            existingAttendance.checkInTime,
-            new Date(),
-            user.shift,
-            isHoliday ? true : false,
-            user.weekendOff,
-          );
+          try {
+            overTime = extraTime(
+              existingAttendance.checkInTime,
+              new Date(),
+              user.shift,
+              isHoliday ? true : false,
+              user.weekendOff,
+            );
+          } catch (err) {
+            if (respondIfShiftMissing(res, err)) return;
+            throw err;
+          }
         }
 
         // update record with check-out details
@@ -465,16 +513,20 @@ export const checkOut = async (req, res) => {
           },
         });
 
-        sendWebhooks("check_out", {
-          employeName: user.employeeName,
-          dateAndTime: updatedAttendance.checkOutTime,
-          location: updatedAttendance.checkOutLocation,
-          status: updatedAttendance.status,
-          employeeType: user.userType,
-          employeeShift: user.shift,
-          employeeDepartment: user.department?.name,
-          employeeDesignation: user.designation?.name,
-        });
+        sendWebhooks(
+          "check_out",
+          {
+            employeName: user.employeeName,
+            dateAndTime: updatedAttendance.checkOutTime,
+            location: updatedAttendance.checkOutLocation,
+            status: updatedAttendance.status,
+            employeeType: user.userType,
+            employeeShift: user.shift,
+            employeeDepartment: user.department?.name,
+            employeeDesignation: user.designation?.name,
+          },
+          tenantId,
+        );
 
         return success(res, 200, "Check-out successful", updatedAttendance);
       });
@@ -488,14 +540,17 @@ export const checkOut = async (req, res) => {
 export const createAttendance = async (req, res) => {
   // This endpoint can be used by admin to create attendance record for a user (for example in case of manual entry or correction)
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const { userId, date, checkInTime, checkOutTime, status } = req.body;
 
     const checkInDateTime = new Date(checkInTime);
     const checkOutDateTime = new Date(checkOutTime);
 
-    // validate user exists
-    const employee = await prisma.user.findUnique({
-      where: { id: parseInt(userId) },
+    // validate user exists in this company
+    const employee = await prisma.user.findFirst({
+      where: { id: parseInt(userId), tenantId },
       select: { id: true },
     });
     if (!employee) {
@@ -519,6 +574,7 @@ export const createAttendance = async (req, res) => {
     const existingAttendance = await prisma.attendance.findFirst({
       where: {
         userId: parseInt(userId),
+        tenantId,
         date: {
           gte: attendanceDayStart,
           lte: attendanceDayEnd,
@@ -529,8 +585,8 @@ export const createAttendance = async (req, res) => {
       return error(res, 400, "Attendance record already exists for this date");
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: parseInt(userId) },
+    const user = await prisma.user.findFirst({
+      where: { id: parseInt(userId), tenantId },
       select: { shift: true, weekendOff: true },
     });
 
@@ -547,6 +603,7 @@ export const createAttendance = async (req, res) => {
     const attendance = await prisma.attendance.create({
       data: {
         userId: parseInt(userId),
+        tenantId,
         date: attendanceDayStart,
         checkInTime: checkInDateTime,
         checkOutTime: checkOutDateTime,
@@ -562,19 +619,23 @@ export const createAttendance = async (req, res) => {
     );
   } catch (err) {
     console.error("Create attendance error:", err);
+    if (respondIfShiftMissing(res, err)) return;
     return error(res, 500, "Internal server error");
   }
 };
 
 export const updateAttendance = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const { attendanceId } = req.params;
     const { date, checkInTime, checkOutTime, status } = req.body;
 
     let overTime = 0;
     if (checkInTime && checkOutTime) {
-      const attendanceRecord = await prisma.attendance.findUnique({
-        where: { id: parseInt(attendanceId) },
+      const attendanceRecord = await prisma.attendance.findFirst({
+        where: { id: parseInt(attendanceId), tenantId },
         include: {
           user: {
             select: {
@@ -598,8 +659,15 @@ export const updateAttendance = async (req, res) => {
       );
     }
 
+    const existing = await prisma.attendance.findFirst({
+      where: { id: parseInt(attendanceId), tenantId },
+    });
+    if (!existing) {
+      return error(res, 404, "Attendance record not found");
+    }
+
     const updatedAttendance = await prisma.attendance.update({
-      where: { id: parseInt(attendanceId) },
+      where: { id: existing.id },
       data: {
         checkInTime: checkInTime ? new Date(checkInTime) : undefined,
         checkOutTime: checkOutTime ? new Date(checkOutTime) : undefined,
@@ -618,6 +686,7 @@ export const updateAttendance = async (req, res) => {
     if (err.code === "P2025") {
       return error(res, 404, "Attendance record not found");
     }
+    if (respondIfShiftMissing(res, err)) return;
     console.error("Update attendance error:", err);
     return error(res, 500, "Internal server error");
   }
@@ -625,6 +694,12 @@ export const updateAttendance = async (req, res) => {
 
 export const specialDutyCheckIn = async (req, res) => {
   try {
+    const tenantId = await requireBodyguardEnabled(req, res);
+    if (!tenantId) return;
+    if (req.user.userType !== "BODYGUARD") {
+      return error(res, 403, "Special duty is only for bodyguards");
+    }
+
     const userId = req.user.userId;
     const checkInImage = req.file;
     const { lat, lng, address } = req.body;
@@ -645,6 +720,7 @@ export const specialDutyCheckIn = async (req, res) => {
       prisma.attendance.findFirst({
         where: {
           userId,
+          tenantId,
           checkInTime: {
             gte: startOfDay,
             lte: endOfDay,
@@ -656,6 +732,7 @@ export const specialDutyCheckIn = async (req, res) => {
       prisma.SpecialAttendance.findFirst({
         where: {
           userId,
+          tenantId,
           checkInTime: {
             gte: startOfDay,
             lte: endOfDay,
@@ -695,6 +772,7 @@ export const specialDutyCheckIn = async (req, res) => {
       const attendance = await prisma.SpecialAttendance.create({
         data: {
           userId,
+          tenantId,
           date: new Date(),
           checkInTime: new Date(),
           checkInLocation: JSON.stringify({ lat, lng, address }),
@@ -712,6 +790,12 @@ export const specialDutyCheckIn = async (req, res) => {
 
 export const specialDutyCheckOut = async (req, res) => {
   try {
+    const tenantId = await requireBodyguardEnabled(req, res);
+    if (!tenantId) return;
+    if (req.user.userType !== "BODYGUARD") {
+      return error(res, 403, "Special duty is only for bodyguards");
+    }
+
     const userId = req.user.userId;
     const checkOutImage = req.file;
     const { lat, lng, address } = req.body;
@@ -732,6 +816,7 @@ export const specialDutyCheckOut = async (req, res) => {
       await prisma.SpecialAttendance.findFirst({
         where: {
           userId,
+          tenantId,
           checkOutTime: null, // Must not have checked out yet
         },
         orderBy: {
@@ -813,10 +898,19 @@ export const specialDutyCheckOut = async (req, res) => {
 
 export const updateSpecialAttendance = async (req, res) => {
   try {
+    const tenantId = await requireBodyguardEnabled(req, res);
+    if (!tenantId) return;
+
     const { attendanceId } = req.params;
     const { date, workHours, checkInTime, checkOutTime } = req.body;
+    const existing = await prisma.SpecialAttendance.findFirst({
+      where: { id: parseInt(attendanceId), tenantId },
+    });
+    if (!existing) {
+      return error(res, 404, "Attendance record not found");
+    }
     const updatedAttendance = await prisma.SpecialAttendance.update({
-      where: { id: parseInt(attendanceId) },
+      where: { id: existing.id },
       data: {
         checkInTime: checkInTime ? new Date(checkInTime) : undefined,
         checkOutTime: checkOutTime ? new Date(checkOutTime) : undefined,
@@ -841,7 +935,26 @@ export const updateSpecialAttendance = async (req, res) => {
 
 export const getAttendanceCalendar = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const { userId, month, year } = req.query;
+    const requestedUserId = parseInt(userId);
+
+    if (
+      req.user.userType !== "ADMIN" &&
+      requestedUserId !== req.user.userId
+    ) {
+      return error(res, 403, "Forbidden");
+    }
+
+    const calendarUser = await prisma.user.findFirst({
+      where: { id: requestedUserId, tenantId },
+      select: { id: true },
+    });
+    if (!calendarUser) {
+      return error(res, 404, "User not found");
+    }
 
     const startDate = getStartOfDay(new Date(year, month - 1, 1));
     const endDate = getEndOfDay(new Date(year, month, 0));
@@ -858,7 +971,8 @@ export const getAttendanceCalendar = async (req, res) => {
     ] = await Promise.all([
       prisma.attendance.findMany({
         where: {
-          userId: parseInt(userId),
+          userId: requestedUserId,
+          tenantId,
           date: {
             gte: startDate,
             lte: endDate,
@@ -868,12 +982,15 @@ export const getAttendanceCalendar = async (req, res) => {
           id: true,
           date: true,
           status: true,
+          checkInTime: true,
+          checkOutTime: true,
         },
         orderBy: { date: "asc" },
       }),
       prisma.SpecialAttendance.findMany({
         where: {
-          userId: parseInt(userId),
+          userId: requestedUserId,
+          tenantId,
           date: {
             gte: startDate,
             lte: endDate,
@@ -885,14 +1002,15 @@ export const getAttendanceCalendar = async (req, res) => {
         },
         orderBy: { date: "asc" },
       }),
-      prisma.user.findUnique({
-        where: { id: parseInt(userId) },
+      prisma.user.findFirst({
+        where: { id: requestedUserId, tenantId },
         select: { weekendOff: true },
       }),
       prisma.leaveEmployee.findMany({
         where: {
-          employeeId: parseInt(userId),
+          employeeId: requestedUserId,
           leave: {
+            tenantId,
             AND: [
               { startDate: { lte: endDate } },
               { endDate: { gte: startDate } },
@@ -905,7 +1023,8 @@ export const getAttendanceCalendar = async (req, res) => {
       }),
       prisma.attendance.findFirst({
         where: {
-          userId: parseInt(userId),
+          userId: requestedUserId,
+          tenantId,
         },
         orderBy: {
           date: "asc",
@@ -949,6 +1068,8 @@ export const getAttendanceCalendar = async (req, res) => {
           specialId: specialRecord.id,
           date: record.date,
           status: "PRESENT_SPECIAL",
+          checkInTime: record.checkInTime,
+          checkOutTime: record.checkOutTime,
         };
       }
       return record;
@@ -1040,9 +1161,12 @@ export const getAttendanceCalendar = async (req, res) => {
 
 export const getAttendanceById = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const { attendanceId } = req.params;
-    const attendance = await prisma.attendance.findUnique({
-      where: { id: parseInt(attendanceId) },
+    const attendance = await prisma.attendance.findFirst({
+      where: { id: parseInt(attendanceId), tenantId },
       include: {
         user: {
           select: {
@@ -1077,9 +1201,12 @@ export const getAttendanceById = async (req, res) => {
 
 export const getSpecialAttendanceById = async (req, res) => {
   try {
+    const tenantId = await requireBodyguardEnabled(req, res);
+    if (!tenantId) return;
+
     const { attendanceId } = req.params;
-    const attendance = await prisma.SpecialAttendance.findUnique({
-      where: { id: parseInt(attendanceId) },
+    const attendance = await prisma.SpecialAttendance.findFirst({
+      where: { id: parseInt(attendanceId), tenantId },
     });
     if (!attendance) {
       return error(res, 404, "Special Attendance record not found");
@@ -1109,12 +1236,16 @@ export const getSpecialAttendanceById = async (req, res) => {
 
 export const deleteAttendanceInBulk = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const { attendanceIds } = req.body;
     if (!Array.isArray(attendanceIds) || attendanceIds.length === 0) {
       return error(res, 400, "attendanceIds must be a non-empty array");
     }
     await prisma.attendance.deleteMany({
       where: {
+        tenantId,
         id: {
           in: attendanceIds.map((id) => parseInt(id)),
         },
@@ -1132,12 +1263,16 @@ export const deleteAttendanceInBulk = async (req, res) => {
 
 export const deleteSpecialAttendanceInBulk = async (req, res) => {
   try {
+    const tenantId = await requireBodyguardEnabled(req, res);
+    if (!tenantId) return;
+
     const { attendanceIds } = req.body;
     if (!Array.isArray(attendanceIds) || attendanceIds.length === 0) {
       return error(res, 400, "attendanceIds must be a non-empty array");
     }
     await prisma.SpecialAttendance.deleteMany({
       where: {
+        tenantId,
         id: {
           in: attendanceIds.map((id) => parseInt(id)),
         },

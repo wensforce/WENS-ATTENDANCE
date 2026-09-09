@@ -306,6 +306,7 @@ const buildSpecialAttendanceColumns = (onEdit) => [
 const Attendance = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const bodyguardEnabled = Boolean(user?.bodyguardEnabled);
 
   // Tab state
   const [activeTab, setActiveTab] = useState("attendance"); // "attendance" or "special"
@@ -450,6 +451,12 @@ const Attendance = () => {
       setSpecialLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!bodyguardEnabled && activeTab === "special") {
+      setActiveTab("attendance");
+    }
+  }, [bodyguardEnabled, activeTab]);
 
   useEffect(() => {
     fetchEmployees();
@@ -776,6 +783,7 @@ const Attendance = () => {
 
       <div className="p-6 space-y-6">
         {/* ── Attendance Type Tabs ── */}
+        {bodyguardEnabled && (
         <div className="flex gap-2 border-b border-border">
           <button
             onClick={() => setActiveTab("attendance")}
@@ -798,6 +806,7 @@ const Attendance = () => {
             Special Attendance
           </button>
         </div>
+        )}
 
         {/* ── Regular Attendance Tab ── */}
         {activeTab === "attendance" && (

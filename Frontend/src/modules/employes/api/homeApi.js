@@ -34,7 +34,7 @@ export const useAttendanceApi = {
       });
       return response.data;
     } catch (error) {
-      throw error;
+      throw error.response?.data || error;
     }
   },
   specialCheckIn: async (data) => {

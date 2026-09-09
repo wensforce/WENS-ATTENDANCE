@@ -1,9 +1,10 @@
 import React from "react";
 import { Navigate, Outlet } from "react-router-dom";
 import useAuth from "../modules/login/hooks/useAuth";
+import { getHomePath } from "./roleHome";
 
 const UnprotectedRoute = () => {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, user } = useAuth();
 
   if (loading) {
     return (
@@ -17,7 +18,7 @@ const UnprotectedRoute = () => {
   }
 
   if (isAuthenticated) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={getHomePath(user)} replace />;
   }
 
   return <Outlet />;

@@ -13,10 +13,32 @@ datasource db {
   provider = "mysql"
 }
 
+
+model Tenant {
+  id Int @id @default(autoincrement())
+  name String 
+  slug String @unique
+  status String @default("active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  users User[]
+  attendanceSettings AttendanceSetting[]
+  webhooks Webhook[]
+  leaveAndHolidays LeaveAndHoliday[]
+  leaveSubTypes LeaveSubType[]
+  departments Department[]
+  designations Designation[]
+  attendances         Attendance[]
+  specialAttendances  SpecialAttendance[]
+  attendanceRegularizations AttendanceRegularization[]
+  bodyguardEnabled Boolean @default(false)
+  @@map("tenant")
+}
+
 model User { 
   id    Int     @id @default(autoincrement()) 
   employeeName  String?
-  employeeId String? @unique
+  employeeId String?
   shift String?
   email String  @unique
   mobileNumber String  @unique
@@ -30,6 +52,8 @@ model User {
   attendances Attendance[] 
   skipLocationCheck Boolean? @default(false)
   specialAttendances SpecialAttendance[]
+  regularizations AttendanceRegularization[]
+  reviewedRegularizations AttendanceRegularization[] @relation("RegularizeReviewer")
   departmentId Int?
   designationId Int?
   leaves LeaveEmployee[]
@@ -38,6 +62,11 @@ model User {
   designation     Designation? @relation(fields: [designationId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt @default(now())
+  tenantId Int?
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, employeeId])
+  @@index([tenantId])
   @@map("user")
 }
 
@@ -57,6 +86,11 @@ model Attendance {
   checkoutOutside Boolean? @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  tenantId Int?
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+  regularizations AttendanceRegularization[]
+
+  @@index([tenantId])
   @@map("attendance")
 }
 
@@ -74,6 +108,10 @@ model SpecialAttendance {
   workHours String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  tenantId Int?
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
   @@map("special_attendance")
 }
 
@@ -88,17 +126,26 @@ model LeaveAndHoliday {
   subTypeId  Int?
   subType    LeaveSubType? @relation(fields: [subTypeId], references: [id], onDelete: SetNull)
   employees LeaveEmployee[]
+  tenantId Int?
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
   @@index([subTypeId])
+  @@index([tenantId])
   @@map("leave_and_holiday")
 }
 
 model LeaveSubType {
   id Int @id @default(autoincrement())
   type Type? @default(LEAVE)
-  name String @unique
+  name String
   leaves LeaveAndHoliday[]
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt @default(now())
+  tenantId Int?
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
   @@map("leave_sub_type")
 }
 
@@ -122,19 +169,29 @@ model LeaveEmployee {
 
 model Department {
   id   Int    @id @default(autoincrement())
-  name String @unique
+  name String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt @default(now())
   users User[]
+  tenantId Int?
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
   @@map("department")
 }
 
 model Designation {
   id   Int    @id @default(autoincrement())
-  name String @unique
+  name String
   users User[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt @default(now())
+  tenantId Int?
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
   @@map("designation")
 }
 
@@ -144,6 +201,10 @@ model Webhook {
   eventType String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  tenantId Int?
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
   @@map("webhook")
 }
 
@@ -153,6 +214,10 @@ model AttendanceSetting {
   checkInRadius Int @default(100)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  tenantId Int?
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId])
   @@map("attendance_setting")
 }
 
@@ -165,6 +230,7 @@ enum UserType {
   EMPLOYEE
   ADMIN
   BODYGUARD
+  SUPERADMIN
 }
 
 enum status {
@@ -173,4 +239,36 @@ enum status {
   WORK_FROM_HOME
   HALF_DAY
   LATE
+  ABSENT
+}
+
+enum RegularizeStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model AttendanceRegularization {
+  id                  Int               @id @default(autoincrement())
+  userId              Int
+  user                User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date                DateTime
+  requestedCheckIn    DateTime
+  requestedCheckOut   DateTime
+  reason              String            @db.Text
+  status              RegularizeStatus  @default(PENDING)
+  adminNote           String?           @db.Text
+  reviewedById        Int?
+  reviewedBy          User?             @relation("RegularizeReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt          DateTime?
+  attendanceId        Int?
+  attendance          Attendance?       @relation(fields: [attendanceId], references: [id], onDelete: SetNull)
+  tenantId            Int
+  tenant              Tenant            @relation(fields: [tenantId], references: [id])
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@index([tenantId, status])
+  @@index([userId, date])
+  @@map("attendance_regularization")
 }

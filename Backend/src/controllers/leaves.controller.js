@@ -3,13 +3,69 @@ import { success, responses } from "../utils/response.js";
 import sendNotification from "../services/sendNotification.js";
 import { formatForDisplay } from "../utils/dateFormat.js";
 import { sendWebhooks } from "../utils/webhook.js";
+import { requireTenantId } from "../utils/tenant.js";
+
+const subTypeInclude = {
+  subType: {
+    select: {
+      name: true,
+    },
+  },
+};
+
+const adminLeaveInclude = {
+  ...subTypeInclude,
+  employees: {
+    select: {
+      employee: {
+        select: {
+          id: true,
+          employeeName: true,
+        },
+      },
+      leaveId: true,
+    },
+  },
+};
+
+const assertEmployeesAndSubType = async (tenantId, employeeIds, subTypeId) => {
+  if (subTypeId) {
+    const subType = await prisma.leaveSubType.findFirst({
+      where: { id: Number(subTypeId), tenantId },
+    });
+    if (!subType) {
+      return "Invalid leave type for this company";
+    }
+  }
+
+  if (!employeeIds?.length) {
+    return null;
+  }
+
+  const users = await prisma.user.findMany({
+    where: {
+      tenantId,
+      id: { in: employeeIds.map((id) => Number(id)) },
+    },
+    select: { id: true, deviceId: true, employeeId: true },
+  });
+  if (users.length !== employeeIds.length) {
+    return "Invalid employees for this company";
+  }
+  return users;
+};
+
 //return today's leaves and holidays for the user
 export const getLeavesAndHolidays = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     let today = new Date();
     today.setHours(0, 0, 0, 0); // Set time to the start of the day
     const leaves = await prisma.leaveAndHoliday.findMany({
       where: {
+        tenantId,
         AND: [
           {
             employees: {
@@ -28,13 +84,7 @@ export const getLeavesAndHolidays = async (req, res) => {
           },
         ],
       },
-      include: {
-        subType: {
-          select: {
-            name: true,
-          },
-        },
-      },
+      include: subTypeInclude,
     });
     success(res, 200, "Leaves and holidays fetched successfully", leaves);
   } catch (error) {
@@ -45,23 +95,21 @@ export const getLeavesAndHolidays = async (req, res) => {
 
 export const getLeaveAndHolidayById = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const { id } = req.params;
     const leaveAndHoliday = await prisma.leaveAndHoliday.findFirst({
       where: {
         id: parseInt(id),
+        tenantId,
         employees: {
           some: {
             employeeId: req.user.userId,
           },
         },
       },
-      include: {
-        subType: {
-          select: {
-            name: true,
-          },
-        },
-      },
+      include: subTypeInclude,
     });
     if (!leaveAndHoliday) {
       return responses.notFound(res, "Leave or holiday not found");
@@ -75,8 +123,22 @@ export const getLeaveAndHolidayById = async (req, res) => {
 
 export const createLeaveAndHoliday = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const { status, startDate, endDate, reason, employeeIds, subTypeId } =
       req.body;
+
+    const employeesOrError = await assertEmployeesAndSubType(
+      tenantId,
+      employeeIds,
+      subTypeId,
+    );
+    if (typeof employeesOrError === "string") {
+      return responses.badRequest(res, employeesOrError);
+    }
+    const deviceTokens = employeesOrError || [];
+
     const newLeaveAndHoliday = await prisma.leaveAndHoliday.create({
       data: {
         status,
@@ -84,6 +146,7 @@ export const createLeaveAndHoliday = async (req, res) => {
         endDate: new Date(endDate),
         reason,
         subTypeId,
+        tenantId,
         employees: {
           create: employeeIds.map((id) => ({
             employeeId: id,
@@ -92,23 +155,7 @@ export const createLeaveAndHoliday = async (req, res) => {
       },
     });
 
-    // send notification to all employees affected by the new leave or holiday, without blocking the response
-
-    let deviceTokens = [];
-    if (employeeIds.length > 0) {
-      // fetch device tokens of the affected employees
-      deviceTokens = await prisma.user.findMany({
-        where: {
-          id: {
-            in: employeeIds,
-          },
-        },
-        select: {
-          deviceId: true,
-          employeeId: true,
-        },
-      });
-      // send notifications to the affected employees
+    if (deviceTokens.length > 0) {
       const tokens = deviceTokens.map((dt) => dt.deviceId).filter(Boolean);
       if (tokens.length > 0) {
         sendNotification(
@@ -119,13 +166,17 @@ export const createLeaveAndHoliday = async (req, res) => {
       }
     }
 
-    sendWebhooks("leave_added", {
-      status,
-      startDate: new Date(startDate),
-      endDate: new Date(endDate),
-      reason,
-      employeeIds: deviceTokens.map((dt) => dt.employeeId),
-    });
+    sendWebhooks(
+      "leave_added",
+      {
+        status,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+        reason,
+        employeeIds: deviceTokens.map((dt) => dt.employeeId),
+      },
+      tenantId,
+    );
 
     success(
       res,
@@ -141,11 +192,31 @@ export const createLeaveAndHoliday = async (req, res) => {
 
 export const updateLeaveAndHoliday = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const { id } = req.params;
     const { status, startDate, endDate, reason, employeeIds, subTypeId } =
       req.body;
+
+    const existing = await prisma.leaveAndHoliday.findFirst({
+      where: { id: parseInt(id), tenantId },
+    });
+    if (!existing) {
+      return responses.notFound(res, "Leave or holiday not found");
+    }
+
+    const employeesOrError = await assertEmployeesAndSubType(
+      tenantId,
+      employeeIds,
+      subTypeId,
+    );
+    if (typeof employeesOrError === "string") {
+      return responses.badRequest(res, employeesOrError);
+    }
+
     const updatedLeaveAndHoliday = await prisma.leaveAndHoliday.update({
-      where: { id: parseInt(id) },
+      where: { id: existing.id },
       data: {
         status,
         startDate: new Date(startDate),
@@ -154,8 +225,8 @@ export const updateLeaveAndHoliday = async (req, res) => {
         subTypeId,
         employees: {
           deleteMany: {},
-          create: employeeIds.map((id) => ({
-            employeeId: id,
+          create: employeeIds.map((empId) => ({
+            employeeId: empId,
           })),
         },
       },
@@ -174,9 +245,12 @@ export const updateLeaveAndHoliday = async (req, res) => {
 
 export const deleteLeaveAndHoliday = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const { id } = req.params;
-    const leaveAndHoliday = await prisma.leaveAndHoliday.findUnique({
-      where: { id: parseInt(id) },
+    const leaveAndHoliday = await prisma.leaveAndHoliday.findFirst({
+      where: { id: parseInt(id), tenantId },
     });
 
     if (!leaveAndHoliday) {
@@ -184,11 +258,11 @@ export const deleteLeaveAndHoliday = async (req, res) => {
     }
 
     await prisma.leaveEmployee.deleteMany({
-      where: { leaveId: parseInt(id) },
+      where: { leaveId: leaveAndHoliday.id },
     });
 
     await prisma.leaveAndHoliday.delete({
-      where: { id: parseInt(id) },
+      where: { id: leaveAndHoliday.id },
     });
     success(res, 204, "Leave or holiday deleted successfully", null);
   } catch (error) {
@@ -199,16 +273,24 @@ export const deleteLeaveAndHoliday = async (req, res) => {
 
 export const getLeavesAndHolidaysByDate = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const { date, month, year, startDate, endDate } = req.query;
+    const assignedToMe = {
+      tenantId,
+      employees: {
+        some: {
+          employeeId: req.user.userId,
+        },
+      },
+    };
+
     let leavesAndHolidays;
     if (date) {
       leavesAndHolidays = await prisma.leaveAndHoliday.findMany({
         where: {
-          employees: {
-            some: {
-              employeeId: req.user.userId,
-            },
-          },
+          ...assignedToMe,
           startDate: {
             lte: new Date(date),
           },
@@ -216,72 +298,34 @@ export const getLeavesAndHolidaysByDate = async (req, res) => {
             gte: new Date(date),
           },
         },
-        include: {
-          subType: {
-            select: {
-              name: true,
-            },
-          },
-        },
+        include: subTypeInclude,
       });
     } else if (month && year) {
       leavesAndHolidays = await prisma.leaveAndHoliday.findMany({
         where: {
-          employees: {
-            some: {
-              employeeId: req.user.userId,
-            },
-          },
+          ...assignedToMe,
           startDate: {
             gte: new Date(`${year}-${month}-01`),
             lt: new Date(`${year}-${parseInt(month) + 1}-01`),
           },
         },
-        include: {
-          subType: {
-            select: {
-              name: true,
-            },
-          },
-        },
+        include: subTypeInclude,
       });
     } else if (year) {
       leavesAndHolidays = await prisma.leaveAndHoliday.findMany({
         where: {
-          employees: {
-            some: {
-              employeeId: req.user.userId,
-            },
-          },
+          ...assignedToMe,
           startDate: {
             gte: new Date(`${year}-01-01`),
             lt: new Date(`${parseInt(year) + 1}-01-01`),
           },
         },
-        include: {
-          subType: {
-            select: {
-              name: true,
-            },
-          },
-        },
+        include: subTypeInclude,
       });
     } else if (startDate && endDate) {
       leavesAndHolidays = await prisma.leaveAndHoliday.findMany({
-        where: {
-          employees: {
-            some: {
-              employeeId: req.user.userId,
-            },
-          },
-        },
-        include: {
-          subType: {
-            select: {
-              name: true,
-            },
-          },
-        },
+        where: assignedToMe,
+        include: subTypeInclude,
       });
     } else {
       return responses.badRequest(
@@ -304,11 +348,15 @@ export const getLeavesAndHolidaysByDate = async (req, res) => {
 
 export const getAllLeavesAndHolidays = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const { date, month, year, startDate, endDate } = req.query;
     let leavesAndHolidays;
     if (date) {
       leavesAndHolidays = await prisma.leaveAndHoliday.findMany({
         where: {
+          tenantId,
           startDate: {
             lte: new Date(date),
           },
@@ -316,82 +364,34 @@ export const getAllLeavesAndHolidays = async (req, res) => {
             gte: new Date(date),
           },
         },
-        include: {
-          subType: {
-            select: {
-              name: true,
-            },
-          },
-          employees: {
-            select: {
-              employee: {
-                select: {
-                  id: true,
-                  employeeName: true,
-                },
-              },
-              leaveId: true,
-            },
-          },
-        },
+        include: adminLeaveInclude,
       });
     } else if (month && year) {
       leavesAndHolidays = await prisma.leaveAndHoliday.findMany({
         where: {
+          tenantId,
           startDate: {
             gte: new Date(`${year}-${month}-01`),
             lt: new Date(`${year}-${parseInt(month) + 1}-01`),
           },
         },
-        include: {
-          subType: {
-            select: {
-              name: true,
-            },
-          },
-          employees: {
-            select: {
-              employee: {
-                select: {
-                  id: true,
-                  employeeName: true,
-                },
-              },
-              leaveId: true,
-            },
-          },
-        },
+        include: adminLeaveInclude,
       });
     } else if (year) {
       leavesAndHolidays = await prisma.leaveAndHoliday.findMany({
         where: {
+          tenantId,
           startDate: {
             gte: new Date(`${year}-01-01`),
             lt: new Date(`${parseInt(year) + 1}-01-01`),
           },
         },
-        include: {
-          subType: {
-            select: {
-              name: true,
-            },
-          },
-          employees: {
-            select: {
-              employee: {
-                select: {
-                  id: true,
-                  employeeName: true,
-                },
-              },
-              leaveId: true,
-            },
-          },
-        },
+        include: adminLeaveInclude,
       });
     } else if (startDate && endDate) {
       leavesAndHolidays = await prisma.leaveAndHoliday.findMany({
         where: {
+          tenantId,
           startDate: {
             gte: new Date(startDate),
           },
@@ -399,24 +399,7 @@ export const getAllLeavesAndHolidays = async (req, res) => {
             lte: new Date(endDate),
           },
         },
-        include: {
-          subType: {
-            select: {
-              name: true,
-            },
-          },
-          employees: {
-            select: {
-              employee: {
-                select: {
-                  id: true,
-                  employeeName: true,
-                },
-              },
-              leaveId: true,
-            },
-          },
-        },
+        include: adminLeaveInclude,
       });
     } else {
       return responses.badRequest(
@@ -439,6 +422,9 @@ export const getAllLeavesAndHolidays = async (req, res) => {
 
 export const getUserAllLeaves = async (req, res) => {
   try {
+    const tenantId = requireTenantId(req, res);
+    if (!tenantId) return;
+
     const { userId } = req.params;
     const { month, year } = req.query;
     if (!userId) {
@@ -447,6 +433,15 @@ export const getUserAllLeaves = async (req, res) => {
     if (!month || !year) {
       return responses.badRequest(res, "Month and year are required");
     }
+
+    const employee = await prisma.user.findFirst({
+      where: { id: parseInt(userId), tenantId },
+      select: { id: true },
+    });
+    if (!employee) {
+      return responses.notFound(res, "User not found");
+    }
+
     const monthNum = parseInt(month);
     const yearNum = parseInt(year);
     const rangeStart = new Date(yearNum, monthNum - 1, 1);
@@ -455,21 +450,16 @@ export const getUserAllLeaves = async (req, res) => {
     // Include any leave overlapping the month, not only those starting in it
     const leaves = await prisma.leaveAndHoliday.findMany({
       where: {
+        tenantId,
         employees: {
           some: {
-            employeeId: parseInt(userId),
+            employeeId: employee.id,
           },
         },
         startDate: { lt: rangeEnd },
         endDate: { gte: rangeStart },
       },
-      include: {
-        subType: {
-          select: {
-            name: true,
-          },
-        },
-      },
+      include: subTypeInclude,
       orderBy: { startDate: "asc" },
     });
     success(res, 200, "Leaves fetched successfully", leaves);

@@ -4,7 +4,8 @@ import { responses } from "../utils/response.js";
 
 const authMiddleware = async (req, res, next) => {
   try {
-    const accessToken = req.cookies?.accessToken || req.headers.authorization?.split(" ")[1];
+    const accessToken =
+      req.cookies?.accessToken || req.headers.authorization?.split(" ")[1];
 
     if (!accessToken) {
       return responses.unauthorized(res, "Access token missing");
@@ -12,6 +13,11 @@ const authMiddleware = async (req, res, next) => {
     // Verify token and extract user info
     const decoded = verifyAccessToken(accessToken);
     const userId = decoded.userId;
+    const tenantId = decoded.tenantId;
+
+    if (!tenantId) {
+      return responses.unauthorized(res, "Tenant ID missing");
+    }
     // Fetch user from database
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
@@ -22,6 +28,7 @@ const authMiddleware = async (req, res, next) => {
       userId: user.id,
       email: user.email,
       deviceId: user.deviceId,
+      tenantId: user.tenantId,
       userType: user.userType,
       mobileNumber: user.mobileNumber,
     };
@@ -39,4 +46,11 @@ const adminMiddleware = (req, res, next) => {
   next();
 };
 
-export { authMiddleware, adminMiddleware };
+const superAdminMiddleware = (req, res, next) => {
+  if (req.user?.userType !== "SUPERADMIN") {
+    return responses.forbidden(res, "Super admin access required");
+  }
+  next();
+};
+
+export { authMiddleware, adminMiddleware, superAdminMiddleware };

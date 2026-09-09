@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, Navigate } from "react-router-dom";
 import { ToastContainer, Bounce, toast } from "react-toastify";
 
 const Home = lazy(() => import("./modules/employes/pages/Home"));
@@ -20,11 +20,14 @@ const AttendanceDetails = lazy(
 const Report = lazy(() => import("./modules/admin/pages/Report"));
 const UserReport = lazy(() => import("./modules/admin/pages/UserReport"));
 const Setting = lazy(() => import("./modules/admin/pages/Setting"));
+const Regularize = lazy(() => import("./modules/admin/pages/Regularize"));
+const Tenants = lazy(() => import("./modules/platform/pages/Tenants"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const DataDeletionRequest = lazy(() => import("./pages/DataDeletionRequest"));
 
 import UserProtectedRoute from "./routes/UserProtectedRoute";
 import AdminProtectedRoute from "./routes/AdminProtectedRoute";
+import SuperAdminProtectedRoute from "./routes/SuperAdminProtectedRoute";
 import UnprotectedRoute from "./routes/UnprotectedRoute";
 import {
   onForegroundMessage,
@@ -94,6 +97,13 @@ const App = () => {
             <Route path="reports" element={<Report />} />
             <Route path="reports/:employeeId" element={<UserReport />} />
             <Route path="settings" element={<Setting />} />
+            <Route path="regularize" element={<Regularize />} />
+          </Route>
+
+          {/* Super Admin platform */}
+          <Route path="/platform" element={<SuperAdminProtectedRoute />}>
+            <Route index element={<Navigate to="tenants" replace />} />
+            <Route path="tenants" element={<Tenants />} />
           </Route>
         </Routes>
       </Suspense>

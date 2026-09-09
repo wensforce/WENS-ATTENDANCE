@@ -22,6 +22,7 @@ import DepartmentCreateModal from "../DepartmentCreateModal";
 import DesignationCreateModal from "../DesignationCreateModal";
 import MapPickerModal from "./MapPickerModal";
 import { parseShiftTime, formatShiftTime } from "../../utils/shiftTimeUtil";
+import useAuth from "../../../login/hooks/useAuth.js";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -145,6 +146,7 @@ const EmployeeFormModal = ({
   editData = null,
   loading = false,
 }) => {
+  const { user } = useAuth();
   const isEdit = !!editData;
   const [form, setForm] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState({});
@@ -540,7 +542,12 @@ const EmployeeFormModal = ({
                   className={`${cls(errors.userType)} pr-8 appearance-none`}
                 >
                   <option value="">Select type…</option>
-                  {USER_TYPES.map((t) => (
+                  {USER_TYPES.filter(
+                    (type) =>
+                      type !== "BODYGUARD" ||
+                      user?.bodyguardEnabled ||
+                      form.userType === "BODYGUARD",
+                  ).map((t) => (
                     <option key={t} value={t}>
                       {t}
                     </option>

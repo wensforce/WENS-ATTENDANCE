@@ -1,7 +1,15 @@
 import React from "react";
 import { X, CalendarX, FileText, Tag, MessageSquare } from "lucide-react";
 
-const AbsentModal = ({ isOpen, onClose, attendanceData, loading }) => {
+const AbsentModal = ({
+  isOpen,
+  onClose,
+  attendanceData,
+  loading,
+  canRegularize = false,
+  onRegularize,
+  requestStatus,
+}) => {
   if (!isOpen) return null;
 
   const data = {
@@ -100,12 +108,28 @@ const AbsentModal = ({ isOpen, onClose, attendanceData, loading }) => {
           </div>
 
           {/* Action Button */}
-          <button
-            onClick={onClose}
-            className="w-full mt-4 px-3 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors text-xs"
-          >
-            Close
-          </button>
+          <div className="mt-4 space-y-2">
+            {canRegularize && (
+              <button
+                onClick={onRegularize}
+                className="w-full px-3 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors text-xs"
+              >
+                {requestStatus === "PENDING"
+                  ? "View regularization"
+                  : "Regularize this day"}
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className={`w-full px-3 py-2 rounded-lg font-medium transition-colors text-xs ${
+                canRegularize
+                  ? "border border-border text-text-primary hover:bg-background"
+                  : "bg-primary text-primary-foreground hover:bg-primary/90"
+              }`}
+            >
+              Close
+            </button>
+          </div>
         </div>
       </div>
     </div>

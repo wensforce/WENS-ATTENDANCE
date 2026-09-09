@@ -10,6 +10,7 @@ import {
   UserCheck,
   UserX,
   Clock,
+  ClipboardCheck,
   Menu,
   X,
   ChevronRight,
@@ -19,11 +20,20 @@ const NAV_ITEMS = [
   { label: "Dashboard", icon: LayoutDashboard, to: "/admin/dashboard" },
   { label: "Employees", icon: Users, to: "/admin/employees" },
   { label: "Attendance", icon: CalendarCheck, to: "/admin/attendance" },
+  { label: "Regularize", icon: ClipboardCheck, to: "/admin/regularize" },
   { label: "Reports", icon: BarChart2, to: "/admin/reports" },
   { label: "Settings", icon: Settings, to: "/admin/settings" },
 ];
 
-const Sidebar = memo(({ collapsed, onToggle, onLogout, user }) => {
+const Sidebar = memo(({
+  collapsed,
+  onToggle,
+  onLogout,
+  user,
+  title = "WENS Admin",
+  homeTo = "/",
+  navItems = NAV_ITEMS,
+}) => {
   return (
   <aside
     className={`
@@ -36,8 +46,8 @@ const Sidebar = memo(({ collapsed, onToggle, onLogout, user }) => {
     {/* Logo Row */}
     <div className="flex items-center justify-between px-4 h-16 border-b border-white/10 shrink-0">
       {!collapsed && (
-        <Link to="/" className="text-base font-bold tracking-wide whitespace-nowrap overflow-hidden">
-          Wens Admin
+        <Link to={homeTo} className="text-base font-bold tracking-wide whitespace-nowrap overflow-hidden">
+          {title}
         </Link>
       )}
       <button
@@ -50,7 +60,7 @@ const Sidebar = memo(({ collapsed, onToggle, onLogout, user }) => {
 
     {/* Nav Links */}
     <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-1">
-      {NAV_ITEMS.map(({ label, icon: Icon, to }) => (
+      {navItems.map(({ label, icon: Icon, to }) => (
         <NavLink
           key={label}
           to={to}
