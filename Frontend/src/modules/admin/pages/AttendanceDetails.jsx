@@ -72,27 +72,28 @@ const SectionCard = ({ title, icon: Icon, children }) => (
   </div>
 );
 
-// ─── Photo Panel ──────────────────────────────────────────────────────────
+// ─── Punch Photo ──────────────────────────────────────────────────────────
 
-const PhotoPanel = ({ label, src }) => (
-  <div className="flex flex-col gap-2">
-    <p className="text-xs font-semibold text-text-secondary">{label}</p>
-    {src ? (
-
-      <a href={src} target="_blank" rel="noopener noreferrer">
-        <img
-          src={src}
-          alt={label}
-          className="w-full aspect-square object-cover rounded-xl border border-border hover:opacity-90 transition-opacity cursor-pointer"
-        />
-      </a>
-    ) : (
-      <div className="w-full aspect-square rounded-xl border border-border bg-background flex flex-col items-center justify-center gap-2 text-text-muted">
-        <Image size={28} />
-        <p className="text-xs">No photo</p>
-      </div>
-    )}
-  </div>
+const PunchPhoto = ({ src, label }) => (
+  src ? (
+    <a
+      href={src}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="block w-28 sm:w-42 aspect-9/16 overflow-hidden rounded-xl border border-border shadow-sm shrink-0"
+    >
+      <img
+        src={src}
+        alt={label}
+        className="h-full w-full object-cover hover:opacity-90 transition-opacity cursor-pointer"
+      />
+    </a>
+  ) : (
+    <div className="w-28 sm:w-42 aspect-9/16 rounded-xl border border-border bg-background flex flex-col items-center justify-center gap-1.5 text-text-muted shrink-0">
+      <Image size={22} />
+      <p className="text-[11px]">No photo</p>
+    </div>
+  )
 );
 
 // ─── Location Display ─────────────────────────────────────────────────────
@@ -325,83 +326,76 @@ const AttendanceDetails = () => {
               </div>
             </div>
 
-            
-            {/* ── Photos ── */}
-            {(record.checkInPhoto || record.checkOutPhoto) && (
-              <SectionCard title="Attendance Photos" icon={Image}>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <PhotoPanel label="Check-In Photo" src={record.photos[record.checkInPhoto]} />
-                  <PhotoPanel label="Check-Out Photo" src={record.photos[record.checkOutPhoto]} />
+            {/* ── Check-In / Check-Out ── */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <SectionCard title="Check-In" icon={LogIn}>
+                <div className="flex items-start gap-4">
+                  <PunchPhoto
+                    src={record.photos?.[record.checkInPhoto] ?? null}
+                    label="Check-In Photo"
+                  />
+                  <div className="flex-1 min-w-0 space-y-4">
+                    <InfoRow
+                      icon={Clock}
+                      label="Check-In Time"
+                      value={formatTime(record.checkInTime)}
+                    />
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-background flex items-center justify-center shrink-0 mt-0.5">
+                        <MapPin size={15} className="text-text-muted" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs text-text-muted font-medium mb-1">
+                          Location
+                        </p>
+                        <LocationDisplay locationStr={record.checkInLocation} />
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </SectionCard>
-            )}
 
-            {/* ── Photos placeholder when neither exists ── */}
-            {!record.checkInPhoto && !record.checkOutPhoto && (
-              <SectionCard title="Attendance Photos" icon={Image}>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <PhotoPanel label="Check-In Photo" src={null} />
-                  <PhotoPanel label="Check-Out Photo" src={null} />
+              <SectionCard title="Check-Out" icon={LogOut}>
+                <div className="flex items-start gap-4">
+                  <PunchPhoto
+                    src={record.photos?.[record.checkOutPhoto] ?? null}
+                    label="Check-Out Photo"
+                  />
+                  <div className="flex-1 min-w-0 space-y-4">
+                    <InfoRow
+                      icon={Clock}
+                      label="Check-Out Time"
+                      value={formatTime(record.checkOutTime)}
+                    />
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-background flex items-center justify-center shrink-0 mt-0.5">
+                        <MapPin size={15} className="text-text-muted" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs text-text-muted font-medium mb-1">
+                          Location
+                        </p>
+                        <LocationDisplay locationStr={record.checkOutLocation} />
+                      </div>
+                    </div>
+                    <InfoRow
+                      icon={XCircle}
+                      label="Checked Out Outside"
+                      value={
+                        record.checkoutOutside === true
+                          ? "Yes — outside designated location"
+                          : record.checkoutOutside === false
+                          ? "No — within designated location"
+                          : null
+                      }
+                    />
+                  </div>
                 </div>
               </SectionCard>
-            )}
+            </div>
 
             {/* ── Detail Grid ── */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Check-In Details */}
-              <SectionCard title="Check-In Details" icon={LogIn}>
-                <div className="space-y-4">
-                  <InfoRow
-                    icon={Clock}
-                    label="Check-In Time"
-                    value={formatTime(record.checkInTime)}
-                  />
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-background flex items-center justify-center shrink-0 mt-0.5">
-                      <MapPin size={15} className="text-text-muted" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs text-text-muted font-medium mb-1">
-                        Check-In Location
-                      </p>
-                      <LocationDisplay locationStr={record.checkInLocation} />
-                    </div>
-                  </div>
-                </div>
-              </SectionCard>
-
-              {/* Check-Out Details */}
-              <SectionCard title="Check-Out Details" icon={LogOut}>
-                <div className="space-y-4">
-                  <InfoRow
-                    icon={Clock}
-                    label="Check-Out Time"
-                    value={formatTime(record.checkOutTime)}
-                  />
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-background flex items-center justify-center shrink-0 mt-0.5">
-                      <MapPin size={15} className="text-text-muted" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs text-text-muted font-medium mb-1">
-                        Check-Out Location
-                      </p>
-                      <LocationDisplay locationStr={record.checkOutLocation} />
-                    </div>
-                  </div>
-                  <InfoRow
-                    icon={XCircle}
-                    label="Checked Out Outside"
-                    value={
-                      record.checkoutOutside === true
-                        ? "Yes — outside designated location"
-                        : record.checkoutOutside === false
-                        ? "No — within designated location"
-                        : null
-                    }
-                  />
-                </div>
-              </SectionCard>
 
               {/* Time Summary */}
               <SectionCard title="Time Summary" icon={Timer}>
