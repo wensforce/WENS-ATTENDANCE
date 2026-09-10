@@ -108,7 +108,10 @@ const AttendanceHistory = () => {
   const getTileStatus = (date) => {
     if (getRequestForDate(date)?.status === "PENDING") return "REGULARIZE_PENDING";
     const record = getRecordForDate(date);
-    if (record?.checkInTime && !record?.checkOutTime) return "MISSING_CHECKOUT";
+    const isToday = toDateKey(date) === toDateKey(new Date());
+    if (!isToday && record?.checkInTime && !record?.checkOutTime) {
+      return "MISSING_CHECKOUT";
+    }
     return getDateStatus(date);
   };
 
