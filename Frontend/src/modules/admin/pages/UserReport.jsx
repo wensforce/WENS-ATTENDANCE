@@ -237,6 +237,37 @@ const buildDailyColumns = () => [
       );
     },
   },
+  {
+    header: "Break Extra",
+    key: "breakExtraTime",
+    render: (row) => {
+      const val = row.breakExtraTime;
+      if (!val || val === "-" || val === "00:00") {
+        return <span className="text-sm text-text-muted">—</span>;
+      }
+      return (
+        <span className="text-sm font-mono font-medium text-absent-text">
+          {val}
+        </span>
+      );
+    },
+  },
+  {
+    header: "Net OT / UT",
+    key: "netExtraTime",
+    render: (row) => {
+      const isOT = row.netExtraTime && !row.netExtraTime.startsWith("-");
+      return (
+        <span
+          className={`text-sm font-mono font-semibold ${
+            isOT ? "text-present-text" : "text-text-secondary"
+          }`}
+        >
+          {row.netExtraTime || "—"}
+        </span>
+      );
+    },
+  },
 ];
 
 // ─── Time Cell ────────────────────────────────────────────────────────────
@@ -270,7 +301,9 @@ const exportToExcel = async (data, employeeName, month, year) => {
         "Check-in",
         "Check-out",
         "Working Hours",
-        "Overtime / Undertime",
+        "Attendance OT / UT",
+        "Break Extra",
+        "Net OT / UT",
       ],
     ];
 
@@ -283,6 +316,8 @@ const exportToExcel = async (data, employeeName, month, year) => {
         record.checkout || "—",
         record.workingHours || "—",
         record.overTimeUndertime || "—",
+        record.breakExtraTime || "—",
+        record.netExtraTime || "—",
       ]);
     });
 
@@ -295,6 +330,8 @@ const exportToExcel = async (data, employeeName, month, year) => {
       { wch: 12 },
       { wch: 15 },
       { wch: 18 },
+      { wch: 14 },
+      { wch: 14 },
     ];
 
     const workbook = XLSX.utils.book_new();
@@ -310,12 +347,18 @@ const exportToExcel = async (data, employeeName, month, year) => {
   }
 };
 
-const exportToPDF = async (data, employeeName, month, year, totalExtraTime) => {
+const exportToPDF = async (
+  data,
+  employeeName,
+  month,
+  year,
+  { totalExtraTime, breakExtraTime, netExtraTime } = {},
+) => {
   try {
     const { jsPDF } = await import("jspdf");
     const autoTable = (await import("jspdf-autotable")).default;
 
-    const pdf = new jsPDF();
+    const pdf = new jsPDF("landscape");
     const pageWidth = pdf.internal.pageSize.getWidth();
 
     // Add title
@@ -328,7 +371,9 @@ const exportToPDF = async (data, employeeName, month, year, totalExtraTime) => {
     pdf.setFontSize(10);
     pdf.setTextColor(100);
     pdf.text(`Period: ${monthLabel} ${year}`, 14, 25);
-    pdf.text(`Total OT/UT: ${totalExtraTime}`, 14, 32);
+    pdf.text(`Attendance OT/UT: ${totalExtraTime || "00:00"}`, 14, 32);
+    pdf.text(`Break Extra: ${breakExtraTime || "00:00"}`, 80, 32);
+    pdf.text(`Net OT/UT: ${netExtraTime || "00:00"}`, 140, 32);
     pdf.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 39);
     pdf.setTextColor(0);
 
@@ -342,7 +387,9 @@ const exportToPDF = async (data, employeeName, month, year, totalExtraTime) => {
           "Check-in",
           "Check-out",
           "Working Hours",
-          "OT / UT",
+          "Att OT/UT",
+          "Break Extra",
+          "Net OT/UT",
         ],
       ],
       body: data.map((record) => [
@@ -353,11 +400,13 @@ const exportToPDF = async (data, employeeName, month, year, totalExtraTime) => {
         record.checkout || "—",
         record.workingHours || "—",
         record.overTimeUndertime || "—",
+        record.breakExtraTime || "—",
+        record.netExtraTime || "—",
       ]),
       startY: 50,
       styles: {
-        fontSize: 9,
-        cellPadding: 3,
+        fontSize: 8,
+        cellPadding: 2.5,
       },
       headStyles: {
         fillColor: [13, 27, 42],
@@ -439,13 +488,11 @@ const UserReport = () => {
   const handleExportPDF = async () => {
     setExporting(true);
     try {
-      await exportToPDF(
-        report.rows || [],
-        report.employeeName,
-        month,
-        year,
-        report.totalExtraTime,
-      );
+      await exportToPDF(report.rows || [], report.employeeName, month, year, {
+        totalExtraTime: report.totalExtraTime,
+        breakExtraTime: report.breakExtraTime,
+        netExtraTime: report.netExtraTime,
+      });
     } finally {
       setExporting(false);
       setExportDropdownOpen(false);
@@ -460,11 +507,19 @@ const UserReport = () => {
       .map((w) => w[0]?.toUpperCase())
       .join("") ?? "?";
 
-  // Determine color for total extra time
+  // Determine color for net / attendance extra time
   const isExtraTimePositive = !report?.totalExtraTime?.startsWith("-");
   const extraTimeColor = isExtraTimePositive
     ? "text-present-text"
     : "text-text-secondary";
+  const isNetPositive = !report?.netExtraTime?.startsWith("-");
+  const netExtraTimeColor = isNetPositive
+    ? "text-present-text"
+    : "text-text-secondary";
+  const hasBreakExtra =
+    report?.breakExtraTime &&
+    report.breakExtraTime !== "00:00" &&
+    report.breakExtraTime !== "-";
 
   return (
     <main className="flex-1 min-w-0">
@@ -539,12 +594,30 @@ const UserReport = () => {
                   </div>
                   <div className="text-xs">
                     <p className="text-text-muted font-medium">
-                      Total Extra Time
+                      Attendance OT / UT
                     </p>
                     <p
                       className={`font-mono font-semibold mt-0.5 ${extraTimeColor}`}
                     >
-                      {report.totalExtraTime || "0 hrs"}
+                      {report.totalExtraTime || "00:00"}
+                    </p>
+                  </div>
+                  <div className="text-xs">
+                    <p className="text-text-muted font-medium">Break Extra</p>
+                    <p
+                      className={`font-mono font-semibold mt-0.5 ${
+                        hasBreakExtra ? "text-absent-text" : "text-text-muted"
+                      }`}
+                    >
+                      {report.breakExtraTime || "00:00"}
+                    </p>
+                  </div>
+                  <div className="text-xs">
+                    <p className="text-text-muted font-medium">Net OT / UT</p>
+                    <p
+                      className={`font-mono font-semibold mt-0.5 ${netExtraTimeColor}`}
+                    >
+                      {report.netExtraTime || "00:00"}
                     </p>
                   </div>
                 </div>
@@ -552,7 +625,7 @@ const UserReport = () => {
             </div>
 
             {/* ── Stat Cards ── */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <StatCard
                 label="Total Working Days"
                 value={report.rows?.length || 0}
@@ -560,16 +633,22 @@ const UserReport = () => {
                 valueColor="text-text-primary"
               />
               <StatCard
-                label="Total Extra Time"
-                value={report.totalExtraTime || "0 hrs"}
+                label="Attendance OT / UT"
+                value={report.totalExtraTime || "00:00"}
                 icon={Clock}
                 valueColor={extraTimeColor}
               />
               <StatCard
-                label="Report Month"
-                value={`${monthLabel} ${year}`}
-                icon={Info}
-                valueColor="text-text-primary"
+                label="Break Extra"
+                value={report.breakExtraTime || "00:00"}
+                icon={Clock}
+                valueColor={hasBreakExtra ? "text-absent-text" : "text-text-muted"}
+              />
+              <StatCard
+                label="Net OT / UT"
+                value={report.netExtraTime || "00:00"}
+                icon={Clock}
+                valueColor={netExtraTimeColor}
               />
             </div>
 

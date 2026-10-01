@@ -84,7 +84,6 @@ export const getAllAttendance = async (req, res) => {
           checkInTime: true,
           checkOutTime: true,
           extraTime: true,
-          // include user details
           user: {
             select: {
               id: true,
@@ -92,15 +91,32 @@ export const getAllAttendance = async (req, res) => {
               employeeId: true,
             },
           },
+          breaks: {
+            select: { extraTime: true },
+          },
         },
       }),
       prisma.attendance.count({ where }),
     ]);
 
+    // Sum Break.extraTime per attendance (linked via attendanceId)
+    const attendanceWithBreakExtra = attendanceRecords.map(
+      ({ breaks, ...row }) => {
+        const breakExtraTime = (breaks || []).reduce(
+          (sum, b) => sum + (b.extraTime || 0),
+          0,
+        );
+        return {
+          ...row,
+          breakExtraTime, // minutes over break limit for this attendance day
+        };
+      },
+    );
+
     const totalPages = Math.ceil(totalCount / parseInt(limit));
 
     return success(res, 200, "Attendance records retrieved successfully", {
-      attendanceRecords,
+      attendanceRecords: attendanceWithBreakExtra,
       pagination: {
         currentPage: parseInt(page),
         totalPages,
@@ -1243,14 +1259,22 @@ export const deleteAttendanceInBulk = async (req, res) => {
     if (!Array.isArray(attendanceIds) || attendanceIds.length === 0) {
       return error(res, 400, "attendanceIds must be a non-empty array");
     }
-    await prisma.attendance.deleteMany({
-      where: {
-        tenantId,
-        id: {
-          in: attendanceIds.map((id) => parseInt(id)),
-        },
-      },
-    });
+
+    const ids = attendanceIds.map((id) => parseInt(id, 10)).filter(Number.isFinite);
+    if (ids.length === 0) {
+      return error(res, 400, "attendanceIds must contain valid IDs");
+    }
+
+    // Break has no onDelete Cascade — remove child rows first, then attendance
+    await prisma.$transaction([
+      prisma.break.deleteMany({
+        where: { tenantId, attendanceId: { in: ids } },
+      }),
+      prisma.attendance.deleteMany({
+        where: { tenantId, id: { in: ids } },
+      }),
+    ]);
+
     return success(res, 200, "Attendance records deleted successfully");
   } catch (err) {
     if (err.code === "P2025") {

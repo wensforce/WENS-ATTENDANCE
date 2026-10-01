@@ -5,9 +5,10 @@ import { getHomePath } from "./roleHome";
 import BottomNavigation from "../modules/employes/components/BottomNavigation";
 import Navbar from "../modules/employes/components/Navbar";
 import { requestNotificationPermission } from "../shared/hooks/usePushNotification";
+import OfflineScreen from "../shared/components/OfflineScreen";
 
 const UserProtectedRoute = () => {
-  const { isAuthenticated, loading, user } = useAuth();
+  const { isAuthenticated, loading, user, isOffline, verifySession } = useAuth();
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -25,6 +26,11 @@ const UserProtectedRoute = () => {
         </div>
       </div>
     );
+  }
+
+  // Offline on cold start — never send to login
+  if (isOffline && !isAuthenticated) {
+    return <OfflineScreen onRetry={verifySession} />;
   }
 
   if (!isAuthenticated) {

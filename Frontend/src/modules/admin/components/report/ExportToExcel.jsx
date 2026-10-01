@@ -2,20 +2,19 @@ import { toast } from "react-toastify";
 
 const ExportToExcel = async (data, month, year) => {
   try {
-
     const MONTHS = [
       { value: 1, label: "January" },
       { value: 2, label: "February" },
-        { value: 3, label: "March" },
-        { value: 4, label: "April" },
-        { value: 5, label: "May" },
-        { value: 6, label: "June" },
-        { value: 7, label: "July" },
-        { value: 8, label: "August" },
-        { value: 9, label: "September" },
-        { value: 10, label: "October" },
-        { value: 11, label: "November" },
-        { value: 12, label: "December" },
+      { value: 3, label: "March" },
+      { value: 4, label: "April" },
+      { value: 5, label: "May" },
+      { value: 6, label: "June" },
+      { value: 7, label: "July" },
+      { value: 8, label: "August" },
+      { value: 9, label: "September" },
+      { value: 10, label: "October" },
+      { value: 11, label: "November" },
+      { value: 12, label: "December" },
     ];
 
     // Dynamically import XLSX library
@@ -34,7 +33,9 @@ const ExportToExcel = async (data, month, year) => {
         "Working Days",
         "Total Working Hours",
         "Late Check-ins",
-        "Overtime / Undertime",
+        "Attendance OT / UT",
+        "Break Extra",
+        "Net OT / UT",
       ],
     ];
 
@@ -47,7 +48,9 @@ const ExportToExcel = async (data, month, year) => {
         emp.workingDays || "0/0",
         emp.totalWorkingHours || "0 hrs",
         emp.lateCheckin || 0,
-        emp.overTimeUndertime || "0 hrs",
+        emp.overTimeUndertime || "00:00",
+        emp.breakExtraTime || "00:00",
+        emp.netExtraTime || "00:00",
       ]);
     });
 
@@ -62,7 +65,9 @@ const ExportToExcel = async (data, month, year) => {
       { wch: 15 },
       { wch: 18 },
       { wch: 15 },
-      { wch: 20 },
+      { wch: 18 },
+      { wch: 14 },
+      { wch: 14 },
     ];
 
     const workbook = XLSX.utils.book_new();
@@ -78,4 +83,4 @@ const ExportToExcel = async (data, month, year) => {
   }
 };
 
-export default ExportToExcel
+export default ExportToExcel;

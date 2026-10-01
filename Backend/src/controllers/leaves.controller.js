@@ -1,7 +1,11 @@
 import prisma from "../../lib/prisma.js";
 import { success, responses } from "../utils/response.js";
 import sendNotification from "../services/sendNotification.js";
-import { formatForDisplay } from "../utils/dateFormat.js";
+import {
+  formatForDisplay,
+  getStartOfDay,
+  getEndOfDay,
+} from "../utils/dateFormat.js";
 import { sendWebhooks } from "../utils/webhook.js";
 import { requireTenantId } from "../utils/tenant.js";
 
@@ -26,6 +30,31 @@ const adminLeaveInclude = {
       leaveId: true,
     },
   },
+};
+
+/**
+ * Remove ABSENT attendance rows for selected users in the leave date range
+ * so leave/holiday is not overridden by a prior absent mark.
+ */
+const deleteAbsentForLeaveRange = async (
+  tenantId,
+  employeeIds,
+  startDate,
+  endDate,
+) => {
+  if (!employeeIds?.length) return;
+
+  await prisma.attendance.deleteMany({
+    where: {
+      tenantId,
+      status: "ABSENT",
+      userId: { in: employeeIds.map((id) => Number(id)) },
+      date: {
+        gte: getStartOfDay(new Date(startDate)),
+        lte: getEndOfDay(new Date(endDate)),
+      },
+    },
+  });
 };
 
 const assertEmployeesAndSubType = async (tenantId, employeeIds, subTypeId) => {
@@ -139,6 +168,13 @@ export const createLeaveAndHoliday = async (req, res) => {
     }
     const deviceTokens = employeesOrError || [];
 
+    await deleteAbsentForLeaveRange(
+      tenantId,
+      employeeIds,
+      startDate,
+      endDate,
+    );
+
     const newLeaveAndHoliday = await prisma.leaveAndHoliday.create({
       data: {
         status,
@@ -214,6 +250,13 @@ export const updateLeaveAndHoliday = async (req, res) => {
     if (typeof employeesOrError === "string") {
       return responses.badRequest(res, employeesOrError);
     }
+
+    await deleteAbsentForLeaveRange(
+      tenantId,
+      employeeIds,
+      startDate,
+      endDate,
+    );
 
     const updatedLeaveAndHoliday = await prisma.leaveAndHoliday.update({
       where: { id: existing.id },

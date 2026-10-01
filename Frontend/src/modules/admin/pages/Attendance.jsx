@@ -183,16 +183,46 @@ const TimeCell = ({ checkTime }) => {
 // ─── Duration Cell ┌────────────────────────────────────────────────────────
 
 const DurationCell = ({ extraTime }) => {
-  if (!extraTime) return <span className="text-text-muted">—</span>;
+  if (!extraTime && extraTime !== 0) {
+    return <span className="text-text-muted">—</span>;
+  }
 
-  const isOvertime = !extraTime.startsWith("-");
+  // Support minutes (number) or HH:MM string
+  const display =
+    typeof extraTime === "number"
+      ? extraTime > 0
+        ? `${String(Math.floor(extraTime / 60)).padStart(2, "0")}:${String(extraTime % 60).padStart(2, "0")}`
+        : null
+      : extraTime;
+
+  if (!display || display === "00:00") {
+    return <span className="text-text-muted">—</span>;
+  }
+
+  const isOvertime = typeof display === "string" ? !display.startsWith("-") : true;
   const color = isOvertime ? "text-present-text" : "text-text-secondary";
 
   return (
     <div className={`flex items-center gap-1 ${color}`}>
       <Clock size={14} className="shrink-0" />
-      <span className="text-xs font-medium">{extraTime}</span>
+      <span className="text-xs font-medium">{display}</span>
     </div>
+  );
+};
+
+const BreakExtraCell = ({ breakExtraTime }) => {
+  const mins =
+    typeof breakExtraTime === "number"
+      ? breakExtraTime
+      : Number(breakExtraTime) || 0;
+  if (!mins || mins <= 0) {
+    return <span className="text-text-muted text-xs">—</span>;
+  }
+  const display = `${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
+  return (
+    <span className="text-xs font-mono font-medium text-absent-text">
+      {display}
+    </span>
   );
 };
 
@@ -240,6 +270,11 @@ const buildColumns = (onEdit) => [
     header: "Undertime/Overtime",
     key: "extraTime",
     render: (row) => <DurationCell extraTime={row.extraTime} />,
+  },
+  {
+    header: "Break Extra",
+    key: "breakExtraTime",
+    render: (row) => <BreakExtraCell breakExtraTime={row.breakExtraTime} />,
   },
   {
     header: "Check-out Outside",

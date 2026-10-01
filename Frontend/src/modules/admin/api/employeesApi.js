@@ -6,10 +6,25 @@ export const employeesApi = {
    * @param {number} page - Page number (1-indexed, defaults to 1)
    * @returns {Promise} { employees: [], pagination: { currentPage, totalPages, totalCount, ... } }
    */
-  fetchAllEmployees: async ({page = 1, search = ""}) => {
-    
+  fetchAllEmployees: async ({
+    page = 1,
+    search = "",
+    limit,
+    departmentId,
+    designationId,
+    idsOnly = false,
+  } = {}) => {
+    const params = { page, search };
+    if (limit) params.limit = limit;
+    if (departmentId != null && departmentId !== "") {
+      params.departmentId = departmentId;
+    }
+    if (designationId != null && designationId !== "") {
+      params.designationId = designationId;
+    }
+    if (idsOnly) params.idsOnly = true;
     const response = await api.get("/admin/employees", {
-      params: { page, search },
+      params,
     });
     return response.data;
   },

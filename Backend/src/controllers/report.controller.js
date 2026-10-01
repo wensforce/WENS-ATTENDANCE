@@ -1,9 +1,14 @@
 import prisma from "../../lib/prisma.js";
 import { success, error } from "../utils/response.js";
-import { calculateTotalExtraTime } from "../utils/attendanceUtils.js";
+import {
+  calculateTotalExtraTime,
+  calculateNetExtraTime,
+  formatMinutesToExtraTime,
+} from "../utils/attendanceUtils.js";
 import {
   getWorkingDaysInMonth,
   sumTotalWorkHours,
+  sumBreakExtraMins,
   buildMonthlyUserReportRows,
 } from "../utils/reportUtils.js";
 import { getStartOfDay, getEndOfDay } from "../utils/dateFormat.js";
@@ -15,7 +20,9 @@ import { requireTenantId } from "../utils/tenant.js";
  * Returns a paginated list of all employees with their monthly attendance summary:
  *   - employeeName, employeeId
  *   - totalWorkingHours   (sum of actual worked hours)
- *   - overTimeUndertime   (sum of extraTime; negative value = undertime)
+ *   - overTimeUndertime   (attendance extra / undertime only)
+ *   - breakExtraTime      (sum of Break.extraTime for the month)
+ *   - netExtraTime        (overTimeUndertime − breakExtraTime)
  *   - workingDays         (e.g. "22/25" → attended / totalWorkingDaysInMonth)
  */
 
@@ -80,6 +87,13 @@ export const getMonthlyReport = async (req, res) => {
                 extraTime: true,
                 status: true,
               },
+            },
+            breaks: {
+              where: {
+                startTime: { gte: startDate, lte: endDate },
+                extraTime: { gt: 0 },
+              },
+              select: { extraTime: true },
             },
           },
         }),
@@ -160,7 +174,9 @@ export const getMonthlyReport = async (req, res) => {
 
       const lateCheckin = attendances.filter((a) => a.status === "LATE").length;
       const totalWorkingHours = sumTotalWorkHours(attendances);
+      const breakExtraMins = sumBreakExtraMins(user.breaks);
       const overTimeUndertime = calculateTotalExtraTime(attendances);
+      const netExtraTime = calculateNetExtraTime(attendances, breakExtraMins);
 
       return {
         employeeName: user.employeeName ?? "-",
@@ -170,6 +186,8 @@ export const getMonthlyReport = async (req, res) => {
         lateCheckin,
         totalWorkingHours,
         overTimeUndertime,
+        breakExtraTime: formatMinutesToExtraTime(breakExtraMins),
+        netExtraTime,
         workingDays: `${attendedDays}/${totalWorkingDays}`,
       };
     });
@@ -238,6 +256,9 @@ export const getMonthlyReportByUserId = async (req, res) => {
             checkOutTime: true,
             extraTime: true,
             status: true,
+            breaks: {
+              select: { extraTime: true },
+            },
           },
           orderBy: { date: "asc" },
         }),
@@ -265,7 +286,7 @@ export const getMonthlyReportByUserId = async (req, res) => {
       return error(res, 404, "User not found");
     }
 
-    // 2) Build daily rows
+    // 2) Build daily rows (nets attendance OT with break OT per day)
     const rows = buildMonthlyUserReportRows({
       startDate,
       monthEnd,
@@ -277,6 +298,11 @@ export const getMonthlyReportByUserId = async (req, res) => {
         : null,
     });
 
+    const breakExtraMins = attendances.reduce(
+      (sum, a) => sum + sumBreakExtraMins(a),
+      0,
+    );
+
     // 3) Return response
     return success(res, 200, "Monthly user report fetched successfully", {
       employeeName: user.employeeName ?? "-",
@@ -286,6 +312,8 @@ export const getMonthlyReportByUserId = async (req, res) => {
       month,
       year,
       totalExtraTime: calculateTotalExtraTime(attendances),
+      breakExtraTime: formatMinutesToExtraTime(breakExtraMins),
+      netExtraTime: calculateNetExtraTime(attendances, breakExtraMins),
       rows,
     });
   } catch (err) {
@@ -350,6 +378,13 @@ export const exportMonthlyReport = async (req, res) => {
                 extraTime: true,
                 status: true,
               },
+            },
+            breaks: {
+              where: {
+                startTime: { gte: startDate, lte: endDate },
+                extraTime: { gt: 0 },
+              },
+              select: { extraTime: true },
             },
           },
         }),
@@ -429,7 +464,9 @@ export const exportMonthlyReport = async (req, res) => {
 
       const lateCheckin = attendances.filter((a) => a.status === "LATE").length;
       const totalWorkingHours = sumTotalWorkHours(attendances);
+      const breakExtraMins = sumBreakExtraMins(user.breaks);
       const overTimeUndertime = calculateTotalExtraTime(attendances);
+      const netExtraTime = calculateNetExtraTime(attendances, breakExtraMins);
 
       return {
         employeeName: user.employeeName ?? "-",
@@ -439,6 +476,8 @@ export const exportMonthlyReport = async (req, res) => {
         lateCheckin,
         totalWorkingHours,
         overTimeUndertime,
+        breakExtraTime: formatMinutesToExtraTime(breakExtraMins),
+        netExtraTime,
         workingDays: `${attendedDays}/${totalWorkingDays}`,
       };
     });

@@ -6,7 +6,8 @@ import {
 } from "../utils/dateFormat.js";
 import {
   calculateLateCheckIns,
-  calculateTotalExtraTime,
+  calculateNetExtraTime,
+  formatMinutesToExtraTime,
 } from "../utils/attendanceUtils.js";
 import { responses, success } from "../utils/response.js";
 import { requireTenantId } from "../utils/tenant.js";
@@ -18,53 +19,101 @@ export const getUserDashboard = async (req, res) => {
 
     const userId = req.user.userId;
     const userType = req.user.userType;
+    const monthStart = new Date(
+      new Date().getFullYear(),
+      new Date().getMonth(),
+      1,
+    );
 
-    const [todayAttendance, monthAttendance, specialDuty] = await Promise.all([
-      prisma.attendance.findFirst({
-        where: {
-          userId,
-          tenantId,
-          checkInTime: {
-            gte: getStartOfDay(),
-            lte: getEndOfDay(),
-          },
-        },
-      }),
-      prisma.attendance.findMany({
-        where: {
-          userId,
-          tenantId,
-          checkInTime: {
-            gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-          },
-        },
-        select: {
-          status: true,
-          extraTime: true,
-        },
-      }),
-      userType === "BODYGUARD"
-        ? prisma.specialAttendance.findFirst({
-            where: {
-              userId,
-              tenantId,
-              date: {
-                gte: getStartOfDay(),
-                lte: getEndOfDay(),
-              },
+    const [todayAttendanceRaw, monthAttendance, specialDuty, breakExtraAgg] =
+      await Promise.all([
+        prisma.attendance.findFirst({
+          where: {
+            userId,
+            tenantId,
+            checkInTime: {
+              gte: getStartOfDay(),
+              lte: getEndOfDay(),
             },
-          })
-        : Promise.resolve([]),
-    ]);
+          },
+          include: {
+            breaks: {
+              select: { extraTime: true },
+            },
+          },
+        }),
+        prisma.attendance.findMany({
+          where: {
+            userId,
+            tenantId,
+            checkInTime: {
+              gte: monthStart,
+            },
+          },
+          select: {
+            status: true,
+            extraTime: true,
+          },
+        }),
+        userType === "BODYGUARD"
+          ? prisma.specialAttendance.findFirst({
+              where: {
+                userId,
+                tenantId,
+                date: {
+                  gte: getStartOfDay(),
+                  lte: getEndOfDay(),
+                },
+              },
+            })
+          : Promise.resolve([]),
+        prisma.break.aggregate({
+          where: {
+            userId,
+            tenantId,
+            startTime: { gte: monthStart },
+            extraTime: { gt: 0 },
+          },
+          _sum: { extraTime: true },
+        }),
+      ]);
 
     const lateCheckIns =
       calculateLateCheckIns(monthAttendance) + "/" + monthAttendance.length;
-    const totalExtraTime = calculateTotalExtraTime(monthAttendance);
+
+    const monthBreakExtraMins = breakExtraAgg?._sum?.extraTime || 0;
+    // Month card: attendance OT − month break OT
+    const totalExtraTime = calculateNetExtraTime(
+      monthAttendance,
+      monthBreakExtraMins,
+    );
+
+    // Today attendance: net OT/UT = attendance OT − today's break extra
+    let todayAttendance = null;
+    if (todayAttendanceRaw) {
+      const { breaks, ...row } = todayAttendanceRaw;
+      const breakExtraMins = (breaks || []).reduce(
+        (sum, b) => sum + (b.extraTime || 0),
+        0,
+      );
+      todayAttendance = {
+        ...row,
+        attendanceExtraTime: row.extraTime ?? null,
+        breakExtraTime: breakExtraMins,
+        breakExtraTimeFormatted: formatMinutesToExtraTime(breakExtraMins),
+        // What Home "Overtime/Undertime" shows for today
+        extraTime: calculateNetExtraTime(
+          [{ extraTime: row.extraTime }],
+          breakExtraMins,
+        ),
+      };
+    }
 
     return success(res, 200, "Dashboard data fetched successfully", {
       todayAttendance,
       lateCheckIns,
       totalExtraTime,
+      breakExtraTime: formatMinutesToExtraTime(monthBreakExtraMins),
       specialDuty,
     });
   } catch (error) {

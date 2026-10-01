@@ -241,11 +241,15 @@ const DataTable = ({
                       >
                         {/* Row Checkbox */}
                         {selectable && (
-                          <td className="w-10 text-center px-2 py-3">
+                          <td
+                            className="w-10 text-center px-2 py-3"
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             <input
                               type="checkbox"
                               checked={isSelected}
                               onChange={() => toggleRowSelection(rowId)}
+                              onClick={(e) => e.stopPropagation()}
                               className="cursor-pointer w-4 h-4 accent-black"
                             />
                           </td>

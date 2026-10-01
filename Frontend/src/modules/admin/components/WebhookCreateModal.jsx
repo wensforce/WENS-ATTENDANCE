@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { X, Link, Zap } from "lucide-react";
 
-const WEBHOOK_EVENTS = ["check_in", "check_out", "leave_added", "user_registered"];
+const WEBHOOK_EVENTS = ["check_in", "check_out", "leave_added", "user_registered", "break_started", "break_ended", "admin_ended_break"];
 
 const EMPTY = { url: "", event: WEBHOOK_EVENTS[0] };
 

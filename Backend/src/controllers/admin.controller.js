@@ -149,9 +149,19 @@ export const getAllEmployees = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
+    const departmentId = req.query.departmentId
+      ? parseInt(req.query.departmentId, 10)
+      : null;
+    const designationId = req.query.designationId
+      ? parseInt(req.query.designationId, 10)
+      : null;
+    const idsOnly =
+      req.query.idsOnly === "true" || req.query.idsOnly === "1";
 
     const where = {
       tenantId,
+      ...(Number.isFinite(departmentId) ? { departmentId } : {}),
+      ...(Number.isFinite(designationId) ? { designationId } : {}),
       ...(search
         ? {
             OR: [
@@ -163,6 +173,25 @@ export const getAllEmployees = async (req, res) => {
           }
         : {}),
     };
+
+    // Bulk select helpers (Select All / By Type) — return all matching ids for tenant
+    if (idsOnly) {
+      const employees = await prisma.user.findMany({
+        where,
+        select: {
+          id: true,
+          employeeName: true,
+          employeeId: true,
+        },
+        orderBy: { employeeName: "asc" },
+      });
+      return success(res, 200, "Employees retrieved successfully", {
+        employees,
+        pagination: {
+          totalCount: employees.length,
+        },
+      });
+    }
 
     let [employees, totalCount] = await Promise.all([
       prisma.user.findMany({

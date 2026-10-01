@@ -46,7 +46,23 @@ const StatusBadge = ({ status }) => {
       text: "text-wfh-text",
       label: "Work From Home",
     },
+    ABSENT: {
+      bg: "bg-absent-bg",
+      text: "text-absent-text",
+      label: "Absent",
+    },
+    HOLIDAY: {
+      bg: "bg-holiday-bg",
+      text: "text-holiday-text",
+      label: "Holiday",
+    },
+    LEAVE: {
+      bg: "bg-leave-bg",
+      text: "text-leave-text",
+      label: "Leave",
+    },
   };
+
   const config = map[status] || map.ABSENT;
   return (
     <span

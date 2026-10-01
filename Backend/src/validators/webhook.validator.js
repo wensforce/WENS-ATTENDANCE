@@ -8,7 +8,7 @@ const validate = (req, res, next) => {
   next();
 };
 
-const events = ["check_in", "check_out", "leave_added", "user_registered"];
+const events = ["check_in", "check_out", "leave_added", "user_registered", "break_started", "break_ended", "admin_ended_break"];
 
 export const webhookValidation = [
   body("url")

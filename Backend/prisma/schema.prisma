@@ -31,6 +31,9 @@ model Tenant {
   attendances         Attendance[]
   specialAttendances  SpecialAttendance[]
   attendanceRegularizations AttendanceRegularization[]
+  breakConfigs      BreakConfig[]
+  userBreakConfigs  UserBreakConfig[]
+  breaks            Break[]
   bodyguardEnabled Boolean @default(false)
   @@map("tenant")
 }
@@ -54,6 +57,7 @@ model User {
   specialAttendances SpecialAttendance[]
   regularizations AttendanceRegularization[]
   reviewedRegularizations AttendanceRegularization[] @relation("RegularizeReviewer")
+  breaks Break[]
   departmentId Int?
   designationId Int?
   leaves LeaveEmployee[]
@@ -89,7 +93,7 @@ model Attendance {
   tenantId Int?
   tenant Tenant? @relation(fields: [tenantId], references: [id])
   regularizations AttendanceRegularization[]
-
+  breaks Break[]
   @@index([tenantId])
   @@map("attendance")
 }
@@ -219,6 +223,72 @@ model AttendanceSetting {
 
   @@unique([tenantId])
   @@map("attendance_setting")
+}
+
+model BreakConfig {
+  id                Int               @id @default(autoincrement())
+  tenantId Int?
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+  breakType         String            // 'LUNCH', 'TEA', 'SHORT_BREAK'
+  label             String
+  maxDurationMins   Int
+  maxPerDay         Int
+  isPaid            Boolean           @default(true)
+  isActive          Boolean           @default(true)
+  graceMins         Int               @default(5)
+  scope             String            @default("ALL")   // 'ALL' | 'ROLE' | 'SPECIFIC_USERS'
+  applicableRoles   String?           // used only when scope = 'ROLE'
+  createdBy         Int
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  breaks            Break[]
+  userOverrides     UserBreakConfig[]
+
+  @@unique([tenantId, breakType])
+  @@map("break_config")
+}
+
+model UserBreakConfig {
+  id              Int          @id @default(autoincrement())
+  tenantId Int?
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+  userId          Int
+  breakConfigId   Int
+  isAllowed       Boolean      @default(true)
+  createdBy       Int
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  breakConfig     BreakConfig  @relation(fields: [breakConfigId], references: [id])
+  @@unique([userId, breakConfigId])
+  @@index([tenantId])
+  @@map("user_break_config")
+}
+
+model Break {
+  id              Int          @id @default(autoincrement())
+  tenantId Int?
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+  attendanceId    Int
+  userId          Int
+  user            User         @relation(fields: [userId], references: [id])
+  breakConfigId   Int
+  breakConfig     BreakConfig  @relation(fields: [breakConfigId], references: [id])
+  startTime       DateTime
+  endTime         DateTime?
+  durationMins    Int?
+  extraTime       Int?          // minutes beyond maxDurationMins + graceMins
+  isOverLimit     Boolean      @default(false)
+  autoClosed      Boolean      @default(false)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  attendance      Attendance   @relation(fields: [attendanceId], references: [id])
+
+  @@index([tenantId])
+  @@index([userId])
+  @@map("break")
 }
 
 enum Status {

@@ -4,6 +4,10 @@ import {
   getStartOfDay,
   calculateWorkHours,
 } from "./dateFormat.js";
+import {
+  calculateNetExtraTime,
+  formatMinutesToExtraTime,
+} from "./attendanceUtils.js";
 
 /**
  * Calculates the number of working days in a month for a given user.
@@ -71,6 +75,14 @@ const sumTotalWorkHours = (attendances) => {
   return `${hours}:${minutes} hrs`;
 };
 
+/** Sum Break.extraTime (minutes) from attendance.breaks or a precomputed value */
+const sumBreakExtraMins = (attendanceOrBreaks) => {
+  const breaks = Array.isArray(attendanceOrBreaks)
+    ? attendanceOrBreaks
+    : attendanceOrBreaks?.breaks || [];
+  return breaks.reduce((sum, b) => sum + (b.extraTime || 0), 0);
+};
+
 const toDateKey = (date) => formatDateOnly(new Date(date));
 
 const formatClock = (time) =>
@@ -92,13 +104,22 @@ const buildAttendanceRow = (date, attendance) => {
     );
   }
 
+  const breakExtraMins = sumBreakExtraMins(attendance);
+  const overTimeUndertime = attendance.extraTime ?? "-";
+  const netExtraTime = calculateNetExtraTime(
+    [{ extraTime: attendance.extraTime }],
+    breakExtraMins,
+  );
+
   return {
     date: toDateKey(date),
     day: date.toLocaleDateString("en-US", { weekday: "long" }),
     checkin: formatClock(attendance.checkInTime),
     checkout: formatClock(attendance.checkOutTime),
     workingHours,
-    overTimeUndertime: attendance.extraTime ?? "-",
+    overTimeUndertime,
+    breakExtraTime: formatMinutesToExtraTime(breakExtraMins),
+    netExtraTime,
     status: attendance.status ?? "PRESENT",
   };
 };
@@ -111,6 +132,8 @@ const buildStatusRow = (date, status) => ({
   checkout: "-",
   workingHours: "-",
   overTimeUndertime: "-",
+  breakExtraTime: "-",
+  netExtraTime: "-",
   status,
 });
 
@@ -222,5 +245,6 @@ const buildMonthlyUserReportRows = ({
 export {
   getWorkingDaysInMonth,
   sumTotalWorkHours,
+  sumBreakExtraMins,
   buildMonthlyUserReportRows,
 };

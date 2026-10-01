@@ -2,9 +2,10 @@ import React from "react";
 import { Navigate, Outlet } from "react-router-dom";
 import useAuth from "../modules/login/hooks/useAuth";
 import { getHomePath } from "./roleHome";
+import OfflineScreen from "../shared/components/OfflineScreen";
 
 const UnprotectedRoute = () => {
-  const { isAuthenticated, loading, user } = useAuth();
+  const { isAuthenticated, loading, user, isOffline, verifySession } = useAuth();
 
   if (loading) {
     return (
@@ -15,6 +16,11 @@ const UnprotectedRoute = () => {
         </div>
       </div>
     );
+  }
+
+  // Reload/open offline while on /login — show offline, not the login form
+  if (isOffline && !isAuthenticated) {
+    return <OfflineScreen onRetry={verifySession} />;
   }
 
   if (isAuthenticated) {

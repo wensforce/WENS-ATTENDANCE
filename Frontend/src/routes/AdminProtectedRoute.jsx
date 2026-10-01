@@ -4,6 +4,7 @@ import useAuth from '../modules/login/hooks/useAuth.js';
 import { getHomePath } from './roleHome.js';
 import Sidebar from '../modules/admin/components/Sidebar.jsx';
 import { requestNotificationPermission } from '../shared/hooks/usePushNotification.js';
+import OfflineScreen from '../shared/components/OfflineScreen.jsx';
 
 // Memoised so it never re-renders when sidebar state changes
 const PageContent = memo(({ marginLeft }) => (
@@ -17,7 +18,7 @@ const PageContent = memo(({ marginLeft }) => (
 PageContent.displayName = 'PageContent';
 
 const AdminProtectedRoute = () => {
-  const { user, loading, logout } = useAuth();
+  const { user, loading, logout, isOffline, verifySession } = useAuth();
   const navigate = useNavigate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
@@ -45,6 +46,10 @@ const AdminProtectedRoute = () => {
         </div>
       </div>
     );
+  }
+
+  if (isOffline && !user) {
+    return <OfflineScreen onRetry={verifySession} />;
   }
 
   if (!user) {

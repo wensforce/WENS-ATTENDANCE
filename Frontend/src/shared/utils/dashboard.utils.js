@@ -27,11 +27,13 @@ export const formatAttendanceDate = (data) => {
 };
 
 // parse location JSON and extract address
-export const parseLocationAddress = (locationString) => {
-  if (!locationString) return "N/A";
+export const parseLocationAddress = (location) => {
+  if (!location) return "N/A";
+  if (typeof location === "object") return location.address || "N/A";
+  if (typeof location !== "string") return "N/A";
   try {
-    const parsed = JSON.parse(locationString);
-    return parsed.address || "N/A";
+    const parsed = JSON.parse(location);
+    return parsed?.address || "N/A";
   } catch {
     return "N/A";
   }

@@ -7,6 +7,9 @@ const AttendanceHistory = lazy(
   () => import("./modules/employes/pages/AttendanceHistory"),
 );
 const Profile = lazy(() => import("./modules/employes/pages/Profile"));
+const BreakOptions = lazy(
+  () => import("./modules/employes/pages/BreakOptions"),
+);
 const Dashboard = lazy(() => import("./modules/admin/pages/Dashboard"));
 const Login = lazy(() => import("./modules/login/pages/Login"));
 const Employes = lazy(() => import("./modules/admin/pages/Employes"));
@@ -21,7 +24,19 @@ const Report = lazy(() => import("./modules/admin/pages/Report"));
 const UserReport = lazy(() => import("./modules/admin/pages/UserReport"));
 const Setting = lazy(() => import("./modules/admin/pages/Setting"));
 const Regularize = lazy(() => import("./modules/admin/pages/Regularize"));
+const Breaks = lazy(() => import("./modules/admin/pages/Breaks"));
+const BreakLogs = lazy(() => import("./modules/admin/pages/breaks/BreakLogs"));
+const BreakConfigs = lazy(
+  () => import("./modules/admin/pages/breaks/BreakConfigs"),
+);
+const BreakDetails = lazy(
+  () => import("./modules/admin/pages/breaks/BreakDetails"),
+);
+const BreakConfigDetails = lazy(
+  () => import("./modules/admin/pages/breaks/BreakConfigDetails"),
+);
 const Tenants = lazy(() => import("./modules/platform/pages/Tenants"));
+
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const DataDeletionRequest = lazy(() => import("./pages/DataDeletionRequest"));
 
@@ -83,6 +98,7 @@ const App = () => {
           {/* Protected Employee Routes */}
           <Route element={<UserProtectedRoute />}>
             <Route path="/" element={<Home />} />
+            <Route path="/break-options" element={<BreakOptions />} />
             <Route path="/attendance" element={<AttendanceHistory />} />
             <Route path="/profile" element={<Profile />} />
           </Route>
@@ -98,6 +114,12 @@ const App = () => {
             <Route path="reports/:employeeId" element={<UserReport />} />
             <Route path="settings" element={<Setting />} />
             <Route path="regularize" element={<Regularize />} />
+            <Route path="breaks" element={<Breaks />}>
+              <Route path="logs" element={<BreakLogs />} />
+              <Route path="configs" element={<BreakConfigs />} />
+            </Route>
+            <Route path="breaks/configs/:id" element={<BreakConfigDetails />} />
+            <Route path="breaks/:id" element={<BreakDetails />} />
           </Route>
 
           {/* Super Admin platform */}

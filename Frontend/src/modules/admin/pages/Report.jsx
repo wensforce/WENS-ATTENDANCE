@@ -102,7 +102,40 @@ const buildReportColumns = () => [
             isOvertime ? "text-present-text" : "text-text-secondary"
           }`}
         >
-          {row.overTimeUndertime || "0 hrs"}
+          {row.overTimeUndertime || "00:00"}
+        </span>
+      );
+    },
+  },
+  {
+    header: "Break Extra",
+    key: "breakExtraTime",
+    render: (row) => {
+      const val = row.breakExtraTime || "00:00";
+      const hasExtra = val !== "00:00" && val !== "-" && !val.startsWith("-");
+      return (
+        <span
+          className={`font-mono text-sm font-medium ${
+            hasExtra ? "text-absent-text" : "text-text-muted"
+          }`}
+        >
+          {val}
+        </span>
+      );
+    },
+  },
+  {
+    header: "Net OT / UT",
+    key: "netExtraTime",
+    render: (row) => {
+      const isOvertime = !row.netExtraTime?.startsWith("-");
+      return (
+        <span
+          className={`font-mono text-sm font-semibold ${
+            isOvertime ? "text-present-text" : "text-text-secondary"
+          }`}
+        >
+          {row.netExtraTime || "00:00"}
         </span>
       );
     },

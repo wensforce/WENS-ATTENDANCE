@@ -1,11 +1,14 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import useAuth from "../../login/hooks/useAuth.js";
-import { Clock, Clock1, LogIn, LogOut, ToggleLeft } from "lucide-react";
+import { Clock1, Coffee, LogIn, LogOut, ToggleLeft } from "lucide-react";
 const CameraModal = React.lazy(() => import("../components/CameraModal.jsx"));
 import { useAttendanceApi, useDashboardApi } from "../api/homeApi.js";
+import { breakApi } from "../api/breakApi.js";
 import { formatAttendanceTime } from "../../../shared/utils/dashboard.utils.js";
 import StatsCards from "../components/home/StatsCards.jsx";
 import CheckInButton from "../components/home/CheckInButton.jsx";
+import ActiveBreakBar from "../components/break/ActiveBreakBar.jsx";
+import BreakOptionsModal from "../components/break/BreakOptionsModal.jsx";
 import { fetchLocation } from "../utils/fetchCurrentLocation.js";
 import { base64ToBlob } from "../../../shared/utils/fileConvert.js";
 import { toast } from "react-toastify";
@@ -21,6 +24,10 @@ const Home = () => {
   const [dashboardDataloading, setDashboardDataloading] = useState(true);
   const [checkInLoading, setCheckInLoading] = useState(false);
   const [justCheckedIn, setJustCheckedIn] = useState(false);
+
+  const [todayBreaks, setTodayBreaks] = useState([]);
+  const [breakOptionsOpen, setBreakOptionsOpen] = useState(false);
+  const [endingBreak, setEndingBreak] = useState(false);
   // Get current date
   const currentDate = new Date().toLocaleDateString("en-GB", {
     day: "2-digit",
@@ -170,8 +177,19 @@ const Home = () => {
     }
   };
 
+  const loadTodayBreaks = useCallback(async () => {
+    try {
+      const { data } = await breakApi.fetchToday();
+      setTodayBreaks(data?.breaks || []);
+    } catch (error) {
+      console.log(error);
+      setTodayBreaks([]);
+    }
+  }, []);
+
   useEffect(() => {
     loadDashboardData();
+    loadTodayBreaks();
     fetchLocation()
       .then((location) => {
         setCurrentLocation(location);
@@ -179,7 +197,7 @@ const Home = () => {
       .catch((error) => {
         console.log(error);
       });
-  }, []);
+  }, [loadTodayBreaks]);
 
   useEffect(() => {
     if (!(user?.userType === "BODYGUARD" && user?.bodyguardEnabled)) {
@@ -195,6 +213,35 @@ const Home = () => {
       return () => clearTimeout(timer);
     }
   }, [justCheckedIn]);
+
+  const isCheckedIn = !!dashboardData.todayAttendance?.checkInTime;
+  const isCheckedOut = !!dashboardData.todayAttendance?.checkOutTime;
+
+  const activeBreak = useMemo(
+    () => todayBreaks.find((b) => b.endTime == null) || null,
+    [todayBreaks],
+  );
+
+  const showStartBreak =
+    isCheckedIn && !isCheckedOut && !activeBreak && !isSpecialDuty;
+
+  const handleBreakStarted = () => {
+    loadTodayBreaks();
+  };
+
+  const handleEndBreak = async () => {
+    if (!activeBreak?.id || endingBreak) return;
+    setEndingBreak(true);
+    try {
+      await breakApi.end(activeBreak.id);
+      toast.success("Break ended");
+      await loadTodayBreaks();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to end break");
+    } finally {
+      setEndingBreak(false);
+    }
+  };
 
   if (dashboardDataloading || loading) {
     return <SkeletonLoading />;
@@ -253,6 +300,13 @@ const Home = () => {
         </div>
       )}
 
+      {/* Active break sticky bar (above stats) */}
+      <ActiveBreakBar
+        activeBreak={activeBreak}
+        ending={endingBreak}
+        onEnd={handleEndBreak}
+      />
+
       {/* Stats Cards */}
       <StatsCards
         totalExtraTime={dashboardData.totalExtraTime}
@@ -288,6 +342,20 @@ const Home = () => {
           <p className="text-sm font-medium text-green-700">
             Attendance completed for today.
           </p>
+        </div>
+      )}
+
+      {/* Start Break pill — only when checked in, not out, no open break */}
+      {showStartBreak && (
+        <div className="flex justify-center -mt-4 mb-6">
+          <button
+            type="button"
+            onClick={() => setBreakOptionsOpen(true)}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-border bg-surface text-text-primary text-sm font-semibold hover:bg-background active:scale-[0.98] transition-all shadow-sm"
+          >
+            <Coffee size={16} />
+            Start Break
+          </button>
         </div>
       )}
       {/* Current Location */}
@@ -454,6 +522,106 @@ const Home = () => {
           </h5>
         </div>
         <hr className="border-border" />
+        {/* Breaks today */}
+        <div className="py-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex gap-2 items-center">
+              <div className="w-10 h-10 rounded-full flex items-center justify-center bg-background">
+                <Coffee
+                  strokeWidth={2.5}
+                  className="w-5 h-5 text-text-secondary"
+                />
+              </div>
+              <p className="text-base font-medium text-text-secondary uppercase">
+                Breaks
+              </p>
+            </div>
+            <span className="text-sm font-semibold text-text-primary tabular-nums">
+              {todayBreaks.length || "—"}
+            </span>
+          </div>
+
+          {todayBreaks.length === 0 ? (
+            <p className="text-sm text-text-muted text-center py-2">
+              No breaks taken today
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {todayBreaks.map((b) => {
+                const label =
+                  b.breakConfig?.label ||
+                  b.breakConfig?.breakType ||
+                  "Break";
+                const isLive = !b.endTime;
+                const start = formatAttendanceTime(b.startTime);
+                const end = isLive
+                  ? "Now"
+                  : formatAttendanceTime(b.endTime);
+                const durationLabel =
+                  b.durationMins != null
+                    ? b.extraTime > 0
+                      ? `${b.durationMins} min (+${b.extraTime})`
+                      : `${b.durationMins} min`
+                    : isLive
+                      ? "Ongoing"
+                      : null;
+
+                return (
+                  <div
+                    key={b.id}
+                    className={`flex items-center gap-3 rounded-xl px-3 py-3 border ${
+                      isLive
+                        ? "border-text-primary/20 bg-background"
+                        : "border-border/60 bg-background/50"
+                    }`}
+                  >
+                    <div
+                      className={`w-2 h-2 rounded-full shrink-0 ${
+                        isLive
+                          ? "bg-late-text animate-pulse"
+                          : b.isOverLimit
+                            ? "bg-absent-text"
+                            : "bg-present-text"
+                      }`}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-text-primary truncate">
+                          {label}
+                        </p>
+                        {isLive && (
+                          <span className="text-[10px] font-bold uppercase tracking-wide text-late-text shrink-0">
+                            Live
+                          </span>
+                        )}
+                        {!isLive && b.isOverLimit && (
+                          <span className="text-[10px] font-bold uppercase tracking-wide text-absent-text shrink-0">
+                            Over
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-text-muted mt-0.5">
+                        {start}
+                        <span className="mx-1 text-text-muted/60">→</span>
+                        {end}
+                      </p>
+                    </div>
+                    {durationLabel && (
+                      <span
+                        className={`text-sm font-bold tabular-nums shrink-0 ${
+                          isLive ? "text-late-text" : "text-text-primary"
+                        }`}
+                      >
+                        {durationLabel}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        <hr className="border-border" />
         {/* Placeholder content */}
         <div className="py-5 flex items-center justify-between">
           <div className="flex gap-2 items-center">
@@ -482,6 +650,12 @@ const Home = () => {
         isOpen={isCameraModalOpen}
         onClose={() => setIsCameraModalOpen(false)}
         onCapture={handleCameraCapture}
+      />
+
+      <BreakOptionsModal
+        open={breakOptionsOpen}
+        onClose={() => setBreakOptionsOpen(false)}
+        onStarted={handleBreakStarted}
       />
     </main>
   );

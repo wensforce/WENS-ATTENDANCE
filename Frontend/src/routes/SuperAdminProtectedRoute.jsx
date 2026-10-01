@@ -4,6 +4,7 @@ import { Building2 } from "lucide-react";
 import useAuth from "../modules/login/hooks/useAuth.js";
 import Sidebar from "../modules/admin/components/Sidebar.jsx";
 import { getHomePath } from "./roleHome";
+import OfflineScreen from "../shared/components/OfflineScreen.jsx";
 
 const PLATFORM_NAV = [
   { label: "Companies", icon: Building2, to: "/platform/tenants" },
@@ -20,7 +21,7 @@ const PageContent = memo(({ marginLeft }) => (
 PageContent.displayName = "PageContent";
 
 const SuperAdminProtectedRoute = () => {
-  const { user, loading, logout } = useAuth();
+  const { user, loading, logout, isOffline, verifySession } = useAuth();
   const navigate = useNavigate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
@@ -42,6 +43,10 @@ const SuperAdminProtectedRoute = () => {
         </div>
       </div>
     );
+  }
+
+  if (isOffline && !user) {
+    return <OfflineScreen onRetry={verifySession} />;
   }
 
   if (!user) {

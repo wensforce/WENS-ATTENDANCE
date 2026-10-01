@@ -47,6 +47,12 @@ export default defineConfig({
             url: "/attendance",
             icons: [{ src: "/icons/android-chrome-192x192.png", sizes: "192x192" }],
           },
+          {
+            name: "Take Break",
+            short_name: "Break",
+            url: "/break-options",
+            icons: [{ src: "/icons/android-chrome-192x192.png", sizes: "192x192" }],
+          }
         ],
       },
 
