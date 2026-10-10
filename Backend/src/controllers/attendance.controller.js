@@ -56,8 +56,8 @@ export const getAllAttendance = async (req, res) => {
     // search filter
     if (search) {
       where.OR = [
-        { checkInLocation: { contains: search } },
-        { checkOutLocation: { contains: search } },
+        { checkInLocation: { string_contains: search } },
+        { checkOutLocation: { string_contains: search } },
         {
           user: {
             OR: [
@@ -163,8 +163,8 @@ export const getAllSpecialAttendance = async (req, res) => {
     // search filter
     if (search) {
       where.OR = [
-        { checkInLocation: { contains: search } },
-        { checkOutLocation: { contains: search } },
+        { checkInLocation: { string_contains: search } },
+        { checkOutLocation: { string_contains: search } },
         {
           user: {
             OR: [
@@ -361,7 +361,7 @@ export const checkIn = async (req, res) => {
           tenantId,
           date: new Date(),
           checkInTime: new Date(),
-          checkInLocation: JSON.stringify({ lat, lng, address }),
+          checkInLocation: { lat, lng, address },
           status: status,
           checkInPhoto: checkInImageKey,
         },
@@ -514,7 +514,7 @@ export const checkOut = async (req, res) => {
           where: { id: existingAttendance.id },
           data: {
             checkOutTime: new Date(),
-            checkOutLocation: JSON.stringify({ lat, lng, address }),
+            checkOutLocation: { lat, lng, address },
             checkOutPhoto: checkOutImageKey,
             extraTime: overTime,
             checkoutOutside: !isValidLocation,
@@ -791,7 +791,7 @@ export const specialDutyCheckIn = async (req, res) => {
           tenantId,
           date: new Date(),
           checkInTime: new Date(),
-          checkInLocation: JSON.stringify({ lat, lng, address }),
+          checkInLocation: { lat, lng, address },
           checkInPhoto: checkInImageKey,
         },
       });
@@ -897,7 +897,7 @@ export const specialDutyCheckOut = async (req, res) => {
           where: { id: existingAttendance.id },
           data: {
             checkOutTime: new Date(),
-            checkOutLocation: JSON.stringify({ lat, lng, address }),
+            checkOutLocation: { lat, lng, address },
             checkOutPhoto: checkOutImageKey,
             workHours,
           },

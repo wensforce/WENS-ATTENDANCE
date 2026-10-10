@@ -82,8 +82,8 @@ model Attendance {
   status    status @default(PRESENT)
   checkInTime DateTime?
   checkOutTime DateTime?
-  checkInLocation String?
-  checkOutLocation String?
+  checkInLocation Json?
+  checkOutLocation Json?
   checkInPhoto String?
   checkOutPhoto String?
   extraTime String?
@@ -105,8 +105,8 @@ model SpecialAttendance {
   date      DateTime
   checkInTime DateTime?
   checkOutTime DateTime?
-  checkInLocation String?
-  checkOutLocation String?
+  checkInLocation Json?
+  checkOutLocation Json?
   checkInPhoto String?
   checkOutPhoto String?
   workHours String?

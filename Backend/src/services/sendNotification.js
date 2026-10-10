@@ -6,6 +6,14 @@ const sendNotification = (tokens, title, body) => {
       title,
       body,
     },
+    webpush: {
+      notification: {
+        icon: `${process.env.FRONTEND_URL}/icons/android-chrome-192x192.png`,
+      },
+      fcmOptions: {
+        link: process.env.FRONTEND_URL,
+      },
+    },
     tokens,
   };
   admin

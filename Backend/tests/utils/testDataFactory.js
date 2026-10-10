@@ -33,7 +33,7 @@ export const createTestAttendance = (overrides = {}) => {
     userId: 1,
     date: new Date(),
     checkInTime: new Date(),
-    checkInLocation: JSON.stringify({ lat: 28.6139, lng: 77.2090, address: "Test Address" }),
+    checkInLocation: { lat: 28.6139, lng: 77.2090, address: "Test Address" },
     status: "Present",
     checkInPhoto: "test-checkin-photo.jpg",
     checkOutTime: null,
@@ -50,7 +50,7 @@ export const createTestAttendance = (overrides = {}) => {
 export const createTestAttendanceWithCheckout = (overrides = {}) => {
   return createTestAttendance({
     checkOutTime: new Date(),
-    checkOutLocation: JSON.stringify({ lat: 28.6139, lng: 77.2090, address: "Test Address" }),
+    checkOutLocation: { lat: 28.6139, lng: 77.2090, address: "Test Address" },
     checkOutPhoto: "test-checkout-photo.jpg",
     extraTime: 0,
     checkoutOutside: false,

@@ -101,14 +101,17 @@ const PunchPhoto = ({ src, label }) => (
 const LocationDisplay = ({ locationStr, label }) => {
   if (!locationStr) return <span className="text-text-muted text-sm">—</span>;
 
-  let parsed = null;
-  try {
-    parsed = JSON.parse(locationStr);
-  } catch {
-    // raw string
+  let parsed = locationStr;
+  if (typeof locationStr === "string") {
+    try {
+      parsed = JSON.parse(locationStr);
+    } catch {
+      parsed = null;
+    }
   }
 
-  const address = parsed?.address ?? locationStr;
+  const address =
+    parsed?.address ?? (typeof locationStr === "string" ? locationStr : "—");
   const lat = parsed?.lat;
   const lng = parsed?.lng;
 

@@ -3,6 +3,7 @@ import {
   isBreakAllowedForUser,
   resolveBreakOptionsForUser,
 } from "../services/breakAllowed.service.js";
+import breakOutReminder from "../services/breakOutReminder.service.js";
 import { applyTimeOnDate, getBreakDuration } from "../utils/breakUtils.js";
 import { getEndOfDay, getStartOfDay } from "../utils/dateFormat.js";
 import { responses, success } from "../utils/response.js";
@@ -142,7 +143,12 @@ export const startBreak = async (req, res) => {
       include: {
         breakConfig: true,
         user: {
-          select: { id: true, employeeName: true, employeeId: true },
+          select: {
+            id: true,
+            employeeName: true,
+            employeeId: true,
+            deviceId: true,
+          },
         },
       },
     });
@@ -157,6 +163,12 @@ export const startBreak = async (req, res) => {
       },
       tenantId,
     );
+
+    breakOutReminder({
+      deviceId: breakRecord.user.deviceId,
+      breakRecord,
+      breakConfig,
+    });
 
     return success(res, 201, "Break started successfully", {
       break: breakRecord,

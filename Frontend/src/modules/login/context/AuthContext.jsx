@@ -29,19 +29,20 @@ export const AuthProvider = ({ children }) => {
         }
       })
       .catch((error) => {
-        const status = error.response?.status;
-        if (status === 401 || status === 403) {
-          setIsOffline(false);
-          setUser(null);
-          return;
-        }
+        // const status = error.response?.status;
+        // if (status === 401 || status === 403) {
+        //   setIsOffline(false);
+        //   setUser(null);
+        //   return;
+        // }
         if (isNetworkError(error)) {
           // Don't treat offline as logged out — keep user as-is (null on cold start)
           setIsOffline(true);
           return;
         }
         // Other server errors: stay conservative, don't fake logout
-        setIsOffline(true);
+        setIsOffline(false);
+        setUser(null);
       })
       .finally(() => {
         setLoading(false);
